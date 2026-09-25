@@ -6,31 +6,22 @@ import requests
 import streamlit as st
 import tldextract
 
-# Page Configuration
 st.set_page_config(page_title="Free SEO Audit Tool", layout="wide")
-
-st.markdown("""
-    
-""", unsafe_allow_html=True)
 
 st.markdown(
     '
 🔍 Free SEO & Technical Audit Tool
-
 ',
 unsafe_allow_html=True,
 )
 st.markdown(
 '
-
-Apni details aur website URL enter karein taake'
-" complete written on-page, speed aur technical report hasil ki ja"
-" sake.
-
+Apni'
+" details aur website URL enter karein taake complete written on-page,"
+" speed aur technical report hasil ki ja sake.
 ",
 unsafe_allow_html=True,
 )
-
 def get_google_pagespeed(target_url):
 endpoint = f"https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={urllib.parse.quote(target_url)}&strategy=mobile"
 try:
@@ -48,14 +39,12 @@ seo_score = (
     if categories.get("seo")
     else "N/A"
 )
-
 audits = lighthouse.get("audits", {})
 fcp = audits.get("first-contentful-paint", {}).get("displayValue", "N/A")
 lcp = audits.get("largest-contentful-paint", {}).get("displayValue", "N/A")
 cls_val = audits.get("cumulative-layout-shift", {}).get(
     "displayValue", "N/A"
 )
-
 return {
     "performance_score": perf_score,
     "seo_score": seo_score,
@@ -71,10 +60,6 @@ return {
 "lcp": "N/A",
 "cls": "N/A",
 }
-
-==========================================
-📋 MANDATORY USER FORM (Lead Generation)
-==========================================
 with st.form("lead_form"):
 col1, col2 = st.columns(2)
 with col1:
@@ -86,12 +71,8 @@ email = st.text_input("Business Email *", placeholder="e.g. name@company.com")
 website_url = st.text_input(
 "Website URL *", placeholder="https://example.com"
 )
-
 submit_btn = st.form_submit_button("Generate Audit Report 🚀")
-
 if submit_btn:
-
-Validation: Check karein agar koi field khali to nahi
 if not first_name.strip():
 st.error("⚠️ Please enter your First Name.")
 elif not last_name.strip():
@@ -101,11 +82,9 @@ st.error("⚠️ Please enter a valid Email address.")
 elif not website_url.strip():
 st.error("⚠️ Please enter a Website URL.")
 else:
-# URL format theek karna
 target_url = website_url.strip()
 if not target_url.startswith("http"):
 target_url = "https://" + target_url
-
 with st.spinner(
     f"Analyzing {target_url} for {first_name}... Please wait ~15 seconds."
 ):
@@ -122,7 +101,6 @@ with st.spinner(
     st.error(f"❌ Failed to reach website: {e}")
     st.stop()
 
-  # On-Page Crawl
   title = (
       soup.title.string.strip() if soup.title and soup.title.string else ""
   )
@@ -160,112 +138,121 @@ with st.spinner(
 
   psi_data = get_google_pagespeed(target_url)
 
-  # Success Greeting
-  st.success(
-      f"Audit Completed Successfully for {first_name} {last_name}!"
-  )
+  st.success(f"Audit Completed Successfully for {first_name} {last_name}!")
 
-  # Metrics Dashboard Display
   m1, m2, m3, m4 = st.columns(4)
   m1.metric("Performance Score", f"{psi_data['performance_score']}/100")
   m2.metric("Google SEO Score", f"{psi_data['seo_score']}/100")
   m3.metric("H1 Tags Count", len(h1_tags))
   m4.metric("Images Missing ALT", len(missing_alt))
 
-  # Formatted Written Text Report
-  report_text = f"""======================================================================
-           COMPLETE SEO & TECHNICAL AUDIT REPORT
-Client Name: {first_name} {last_name}
-Client Email: {email}
-Target URL : {target_url}
-[1] TECHNICAL & CORE WEB VITALS (Google PageSpeed API)
+  report_lines = [
+      "=" * 70,
+      "COMPLETE SEO & TECHNICAL AUDIT REPORT".center(70),
+      f"Client Name: {first_name} {last_name}",
+      f"Client Email: {email}",
+      f"Target URL : {target_url}",
+      "=" * 70,
+      "",
+      "[1] TECHNICAL & CORE WEB VITALS (Google PageSpeed API)",
+      "-" * 70,
+      f"• Mobile Performance Score : {psi_data['performance_score']}/100",
+      f"• Google SEO Audit Score   : {psi_data['seo_score']}/100",
+      f"• First Contentful Paint   : {psi_data['fcp']}",
+      f"• Largest Contentful Paint : {psi_data['lcp']} (Target: < 2.5s)",
+      f"• Cumulative Layout Shift  : {psi_data['cls']} (Target: < 0.1)",
+      (
+          "• SSL / HTTPS Active       : Yes (Secure)"
+          if target_url.startswith("https")
+          else "• SSL / HTTPS Active       : No (Insecure)"
+      ),
+      f"• Canonical Tag            : {canonical_url}",
+      "",
+      "[2] ON-PAGE SEO & CONTENT ARCHITECTURE",
+      "-" * 70,
+      f'• Meta Title: "{title}"',
+      (
+          f"  - Length: {len(title)} characters ("
+          + ("Optimal" if 50 <= len(title) <= 60 else "Needs Optimization")
+          + ")"
+      ),
+      f'• Meta Description: "{meta_desc if meta_desc else "Missing"}"',
+      (
+          f"  - Length: {len(meta_desc)} characters ("
+          + (
+              "Optimal"
+              if 140 <= len(meta_desc) <= 160
+              else "Needs Optimization"
+          )
+          + ")"
+      ),
+      (
+          f"• Headings Hierarchy: H1 Count = {len(h1_tags)} ("
+          + (
+              "Optimal"
+              if len(h1_tags) == 1
+              else "Critical: Needs exactly one H1"
+          )
+          + ")"
+      ),
+      f"  - Primary H1: {h1_tags[0] if h1_tags else 'None detected'}",
+      f"  - H2 Tags Detected: {len(h2_tags)}",
+      f"• Image Optimization: Total {len(images)}, Missing ALT:"
+      f" {len(missing_alt)}",
+      "",
+      "[3] INTERNAL LINKING & OFF-PAGE SIGNALS",
+      "-" * 70,
+      f"• Internal Links Detected  : {len(internal_links)}",
+      f"• External Outbound Links  : {len(external_links)}",
+      (
+          "• Search Indexing Verification :"
+          f" https://www.google.com/search?q=site%3A{base_domain}"
+      ),
+      (
+          "• Free Backlink Profile Check  :"
+          f" https://ahrefs.com/backlink-checker/?input={base_domain}"
+      ),
+      "",
+      "=" * 70,
+      "PRIORITY ACTION ITEMS".center(70),
+      "=" * 70,
+  ]
 
-• Mobile Performance Score : {psi_data['performance_score']}/100
-• Google SEO Audit Score   : {psi_data['seo_score']}/100
-• First Contentful Paint   : {psi_data['fcp']}
-• Largest Contentful Paint : {psi_data['lcp']} (Target: < 2.5s)
-• Cumulative Layout Shift  : {psi_data['cls']} (Target: < 0.1)
-• SSL / HTTPS Active       : {'Yes (Secure)' if target_url.startswith('https') else 'No (Insecure)'}
-• Canonical Tag            : {canonical_url}
+  if len(h1_tags) != 1:
+    report_lines.append(
+        f"- Heading Fix: Found {len(h1_tags)} H1 tags. Keep exactly 1 H1 per"
+        " page."
+    )
+  if not (50 <= len(title) <= 60):
+    report_lines.append(
+        f"- Meta Title Fix: Current length is {len(title)} chars (Target:"
+        " 50-60)."
+    )
+  if not (140 <= len(meta_desc) <= 160):
+    report_lines.append(
+        f"- Meta Description Fix: Current length is {len(meta_desc)} chars"
+        " (Target: 140-160)."
+    )
+  if len(missing_alt) > 0:
+    report_lines.append(
+        f"- Image SEO: Add descriptive ALT text to {len(missing_alt)}"
+        " images."
+    )
+  if (
+      isinstance(psi_data["performance_score"], int)
+      and psi_data["performance_score"] < 70
+  ):
+    report_lines.append(
+        "- Speed Optimization: Mobile score is"
+        f" {psi_data['performance_score']}/100. Compress images & reduce JS."
+    )
 
-[2] ON-PAGE SEO & CONTENT ARCHITECTURE
-
-• Meta Title:
-
-Text  : "{title}"
-
-Length: {len(title)} characters ({'Optimal' if 50 <= len(title) <= 60 else 'Needs Optimization'})
-
-• Meta Description:
-
-Text  : "{meta_desc if meta_desc else 'Missing'}"
-
-Length: {len(meta_desc)} characters ({'Optimal' if 140 <= len(meta_desc) <= 160 else 'Needs Optimization'})
-
-• Headings Hierarchy:
-
-H1 Count: {len(h1_tags)} ({'Optimal' if len(h1_tags) == 1 else 'Critical: Needs exactly one H1'})
-
-Primary H1: {h1_tags[0] if h1_tags else 'None detected'}
-
-H2 Tags Detected: {len(h2_tags)}
-
-• Image Optimization:
-
-Total Images Found     : {len(images)}
-
-Missing ALT Attributes : {len(missing_alt)}
-
-[3] INTERNAL LINKING & OFF-PAGE SIGNALS
-
-• Internal Links Detected  : {len(internal_links)}
-• External Outbound Links  : {len(external_links)}
-• Search Indexing Verification : https://www.google.com/search?q=site%3A{base_domain}
-• Free Backlink Profile Check  : https://ahrefs.com/backlink-checker/?input={base_domain}
-
-======================================================================
-PRIORITY ACTION ITEMS
-"""
-actions = []
-if len(h1_tags) != 1:
-actions.append(
-f"- Heading Fix: Found {len(h1_tags)} H1 tags. Ensure exactly 1 H1"
-" per page targeting your primary keyword."
-)
-if not (50 <= len(title) <= 60):
-actions.append(
-f"- Meta Title Fix: Current length is {len(title)} characters"
-" (Target: 50-60)."
-)
-if not (140 <= len(meta_desc) <= 160):
-actions.append(
-f"- Meta Description Fix: Current length is {len(meta_desc)}"
-" characters (Target: 140-160)."
-)
-if len(missing_alt) > 0:
-actions.append(
-f"- Image SEO: Add descriptive ALT text to {len(missing_alt)}"
-" images."
-)
-if (
-isinstance(psi_data["performance_score"], int)
-and psi_data["performance_score"] < 70
-):
-actions.append(
-f"- Speed Optimization: Mobile score is"
-f" {psi_data['performance_score']}/100. Compress media assets and"
-" leverage browser caching."
-)
-
-  if not actions:
-    report_text += "No critical issues detected. Site is well-optimized!\n"
-  else:
-    report_text += "\n".join(actions) + "\n"
-
-  st.text_area("Full Written SEO Report", report_text, height=380)
+  full_report = "\n".join(report_lines)
+  st.text_area("Full Written SEO Report", full_report, height=380)
 
   st.download_button(
       label="📥 Download Written Report (TXT)",
-      data=report_text,
+      data=full_report,
       file_name=f"SEO_Audit_{base_domain}.txt",
       mime="text/plain",
+  )
