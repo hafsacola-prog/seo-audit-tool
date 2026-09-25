@@ -9,6 +9,11 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
+# ==========================================================
+# 🔗 APNI GOOGLE SHEET KA WEBHOOK URL YAHAN PASTE KAREIN:
+# ==========================================================
+GOOGLE_SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwetciC31Q-zSgylj7cFxnMN1IUs-B_-bSq3Zfs1Je3AHomk8Qg-IHKlWy2xeI1pyGw4g/exec"
+
 st.set_page_config(page_title="SEO & Technical Audit Tool", layout="wide")
 st.title("SEO & Technical Audit Tool")
 st.write("Enter your details and website URL to generate an in-depth audit report with a branded PDF download.")
@@ -168,6 +173,23 @@ if submit_btn:
                     external_links.append(href)
 
             psi_data = get_google_pagespeed(target_url)
+
+            # --- LEAD AUTO-SAVE TO GOOGLE SHEET ---
+            if GOOGLE_SHEET_WEBHOOK_URL and "script.google.com" in GOOGLE_SHEET_WEBHOOK_URL:
+                try:
+                    sheet_payload = {
+                        "name": user_display_name,
+                        "email": email,
+                        "url": target_url,
+                        "perf_score": psi_data['perf'],
+                        "seo_score": psi_data['seo'],
+                        "h1_count": len(h1_tags),
+                        "missing_alt": len(missing_alt)
+                    }
+                    requests.post(GOOGLE_SHEET_WEBHOOK_URL, json=sheet_payload, timeout=6)
+                except Exception:
+                    pass
+
             st.success(f"Audit completed successfully for {user_display_name}!")
 
             c1, c2, c3, c4 = st.columns(4)
