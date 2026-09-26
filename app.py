@@ -117,7 +117,7 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
     try:
         s_res = requests.get(sitemap_url, headers=headers, timeout=5)
         if s_res.status_code == 200:
-            if "= 400:
+           if res_check.status_code >= 400:
                     broken_count += 1
             except Exception:
                 broken_count += 1
