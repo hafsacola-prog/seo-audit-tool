@@ -22,7 +22,7 @@ AGENCY_PHONE = "+92 302 6264634"
 AGENCY_WEBSITE = "https://rankcentre.net"
 AGENCY_ADDRESS = "Office 402, Business Arcade, Gujrat / Lahore, Pakistan"
 
-# Google Sheet Apps Script Webhook URL
+# Google Sheet Apps Script Webhook URL (Optional)
 GOOGLE_SHEET_WEBHOOK_URL = "YAHAN_APNA_WEBHOOK_URL_PASTE_KAREIN"
 
 st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
@@ -94,11 +94,35 @@ def get_google_pagespeed(target_url):
     except Exception:
         return {"perf": "N/A", "seo": "N/A", "fcp": "N/A", "lcp": "N/A", "cls": "N/A"}
 
+def check_broken_links(internal_links, base_url, headers):
+    clean_internals = []
+    for l in internal_links:
+        full_l = urllib.parse.urljoin(base_url, l)
+        if full_l.startswith("http") and full_l not in clean_internals:
+            clean_internals.append(full_l)
+
+    sample = clean_internals[:10]
+    if not sample:
+        return "No internal links found to test", 0
+
+    broken = 0
+    for link in sample:
+        try:
+            res = requests.get(link, headers=headers, timeout=4, stream=True)
+            if res.status_code >= 400:
+                broken += 1
+        except Exception:
+            broken += 1
+
+    if broken == 0:
+        return f"Healthy (0 broken of {len(sample)} tested)", 0
+    return f"Alert: {broken} broken links of {len(sample)} tested", broken
+
 def audit_deep_technical(target_url, soup, internal_links, headers):
     parsed = urllib.parse.urlparse(target_url)
     base_root = f"{parsed.scheme}://{parsed.netloc}"
     
-    # 1. Robots.txt Check
+    # Robots.txt Check
     robots_url = urllib.parse.urljoin(base_root, "/robots.txt")
     robots_status = "Missing (404 Not Found)"
     try:
@@ -111,116 +135,16 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
     except Exception:
         robots_status = "Connection Timed Out"
 
-    # 2. Sitemap.xml Check
+    # Sitemap.xml Check
     sitemap_url = urllib.parse.urljoin(base_root, "/sitemap.xml")
     sitemap_status = "Missing / Inaccessible"
     try:
         s_res = requests.get(sitemap_url, headers=headers, timeout=5)
         if s_res.status_code == 200:
-           if res_check.status_code >= 400:
-                    broken_count += 1
-            except Exception:
-                broken_count += 1
+            if " 0 else 0
+    calc_health = max(10, int(((calc_perf * 0.4) + (calc_seo * 0.6)) - h1_pen - img_pen))
 
-    if len(sample_links) == 0:
-        broken_status = "No internal links found to test"
-    elif broken_count == 0:
-        broken_status = f"Healthy (0 broken of {len(sample_links)} tested)"
-    else:
-        broken_status = f"Alert: {broken_count} broken links of {len(sample_links)} tested"
-
-    return {
-        "robots": robots_status,
-        "sitemap": sitemap_status,
-        "schema": schema_status,
-        "broken_status": broken_status,
-        "broken_count": broken_count
-    }
-
-def calculate_backlink_gap(competition_tier):
-    if "Low" in competition_tier:
-        return {
-            "tier": "Low Competition / Local Niche",
-            "benchmark_rd": "15 - 35 Referring Domains",
-            "gap_estimate": "10 - 25 High-Quality Backlinks",
-            "strategy": "Local citations, foundational niche backlinks, and 2-3 guest posts per month."
-        }
-    elif "High" in competition_tier:
-        return {
-            "tier": "High Competition / Global Niche",
-            "benchmark_rd": "120 - 300+ Referring Domains",
-            "gap_estimate": "60 - 150+ High-Authority Backlinks (DR 50+)",
-            "strategy": "Aggressive guest outreach, digital PR, resource-page link building, and tiered contextual links."
-        }
-    else:
-        return {
-            "tier": "Medium Competition / Standard Commercial Niche",
-            "benchmark_rd": "45 - 90 Referring Domains",
-            "gap_estimate": "30 - 50 Contextual Editorial Links",
-            "strategy": "Niche-relevant guest blogging on DR 40-70 sites with contextual anchors."
-        }
-
-def build_pdf_report(data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=32, leftMargin=32, topMargin=28, bottomMargin=28)
-    styles = getSampleStyleSheet()
-
-    c_primary = colors.HexColor('#1E3A8A')
-    c_dark = colors.HexColor('#0F172A')
-    c_slate = colors.HexColor('#475569')
-    c_light = colors.HexColor('#F8FAFC')
-    c_border = colors.HexColor('#E2E8F0')
-
-    title_agency = ParagraphStyle('TAgency', parent=styles['Heading1'], fontSize=13, leading=16, fontName='Helvetica-Bold', textColor=c_primary)
-    agency_sub = ParagraphStyle('ASub', parent=styles['Normal'], fontSize=7.5, leading=9.5, textColor=c_slate)
-    sec_title = ParagraphStyle('STitle', parent=styles['Heading2'], fontSize=9.5, leading=12, fontName='Helvetica-Bold', textColor=c_dark, spaceBefore=4, spaceAfter=2)
-    cell_txt = ParagraphStyle('CTxt', parent=styles['Normal'], fontSize=7, leading=9, textColor=c_dark)
-    cell_bold = ParagraphStyle('CBld', parent=styles['Normal'], fontSize=7, leading=9, fontName='Helvetica-Bold', textColor=c_dark)
-    pitch_txt = ParagraphStyle('PTxt', parent=styles['Normal'], fontSize=7, leading=9.5, textColor=colors.HexColor('#1E3A8A'))
-
-    story = []
-
-    # 1. Header
-    header_table_data = [
-        [Paragraph(AGENCY_NAME, title_agency), Paragraph("Email:", cell_bold), Paragraph(AGENCY_EMAIL, agency_sub)],
-        [Paragraph("Search Engine Optimization & Outreach Consultancy", agency_sub), Paragraph("Phone:", cell_bold), Paragraph(AGENCY_PHONE, agency_sub)],
-        [Paragraph("", agency_sub), Paragraph("Website:", cell_bold), Paragraph(AGENCY_WEBSITE, agency_sub)],
-        [Paragraph("", agency_sub), Paragraph("HQ:", cell_bold), Paragraph(AGENCY_ADDRESS, agency_sub)]
-    ]
-    hdr_table = Table(header_table_data, colWidths=[290, 50, 208])
-    hdr_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
-        ('LINEBELOW', (0, -1), (-1, -1), 1.2, c_primary),
-    ]))
-    story.append(hdr_table)
-    story.append(Spacer(1, 5))
-
-    # 2. Metadata Info
-    meta_info = [
-        [Paragraph("Target URL:", cell_bold), Paragraph(data['url'], cell_txt), Paragraph("Client Contact:", cell_bold), Paragraph(data['client'], cell_txt)],
-        [Paragraph("Root Domain:", cell_bold), Paragraph(data['domain'], cell_txt), Paragraph("Client Email:", cell_bold), Paragraph(data['email'], cell_txt)],
-        [Paragraph("Target Keyword:", cell_bold), Paragraph(data['keyword'], cell_txt), Paragraph("Niche Competition:", cell_bold), Paragraph(data['comp_tier'], cell_txt)]
-    ]
-    meta_table = Table(meta_info, colWidths=[75, 200, 75, 198])
-    meta_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), c_light),
-        ('PADDING', (0, 0), (-1, -1), 3),
-        ('BOX', (0, 0), (-1, -1), 0.5, c_border),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#F1F5F9')),
-    ]))
-    story.append(meta_table)
-    story.append(Spacer(1, 5))
-
-    # 3. Health & Visual Diagnostics
-    story.append(Paragraph("Executive Performance & Structural Diagnostics", sec_title))
-    calc_perf = data['psi']['perf'] if isinstance(data['psi']['perf'], int) else 65
-    calc_seo = data['psi']['seo'] if isinstance(data['psi']['seo'], int) else 75
-    h1_penalty = 15 if data['h1_count'] != 1 else 0
-    img_penalty = 10 if data['missing_alt'] > 0 else 0
-    calculated_health = max(10, int(((calc_perf * 0.4) + (calc_seo * 0.6)) - h1_penalty - img_penalty))
-
-    donut_chart_buffer = generate_health_donut_chart(calculated_health)
+    donut_chart_buffer = generate_health_donut_chart(calc_health)
     bar_chart_buffer = generate_metrics_bar_chart(data['int_links'], data['ext_links'], data['total_img'], data['missing_alt'])
     donut_img = Image(donut_chart_buffer, width=95, height=95)
     bar_img = Image(bar_chart_buffer, width=175, height=95)
@@ -251,7 +175,7 @@ def build_pdf_report(data):
     story.append(diag_table)
     story.append(Spacer(1, 5))
 
-    # 4. Deep Technical Diagnostics
+    # Deep Technical Table
     story.append(Paragraph("1. Deep Technical Crawlability & Architecture", sec_title))
     tech_diag = data['tech_diag']
     d_data = [
@@ -270,7 +194,7 @@ def build_pdf_report(data):
     story.append(d_table)
     story.append(Spacer(1, 5))
 
-    # 5. On-Page Optimization
+    # On-Page Table
     story.append(Paragraph("2. On-Page Optimization & Core Web Vitals", sec_title))
     tech_data = [
         [Paragraph("Audit Check", cell_bold), Paragraph("Observed Value", cell_bold), Paragraph("Optimization Status", cell_bold)],
@@ -289,7 +213,7 @@ def build_pdf_report(data):
     story.append(tech_table)
     story.append(Spacer(1, 5))
 
-    # 6. Off-Page Backlink Gap Analysis
+    # Gap Table
     story.append(Paragraph("3. Off-Page Authority & Link-Building Gap", sec_title))
     gap = data['gap_data']
     gap_table_data = [
@@ -308,7 +232,7 @@ def build_pdf_report(data):
     story.append(gap_table)
     story.append(Spacer(1, 5))
 
-    # 7. Outreach Pitch Box
+    # Pitch Box
     pitch_header = f"Ready to Close Your Authority Gap? {AGENCY_NAME} Outreach Solution"
     pitch_details = (
         f"Technical fixes establish crawling readiness, but authoritative backlinks drive top positions. "
@@ -361,122 +285,126 @@ with st.form("audit_form"):
 if submit_btn:
     if not email.strip() or "@" not in email or "." not in email:
         st.error("Please enter a valid Business Email address.")
-    elif not website_url.strip():
+        st.stop()
+    
+    if not website_url.strip():
         st.error("Please enter a valid Website URL.")
-    else:
-        target_url = website_url.strip()
-        if not target_url.startswith("http"):
-            target_url = "https://" + target_url
-        user_display_name = f"{first_name} {last_name}".strip() if (first_name or last_name) else "Website Owner"
-        active_keyword = target_keyword.strip() if target_keyword.strip() else "Core Industry Keyword"
+        st.stop()
 
-        with st.spinner(f"Crawling {target_url} (Checking Robots, Sitemap, Schema, Broken Links)..."):
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    target_url = website_url.strip()
+    if not target_url.startswith("http"):
+        target_url = "https://" + target_url
+    
+    user_display_name = f"{first_name} {last_name}".strip() if (first_name or last_name) else "Website Owner"
+    active_keyword = target_keyword.strip() if target_keyword.strip() else "Core Industry Keyword"
+
+    with st.spinner(f"Crawling {target_url} (Checking Robots, Sitemap, Schema, Broken Links)..."):
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        try:
+            response = requests.get(target_url, headers=headers, timeout=15)
+            soup = BeautifulSoup(response.text, "html.parser")
+        except Exception as e:
+            st.error(f"Target website error: {e}")
+            st.stop()
+
+        title = soup.title.string.strip() if soup.title and soup.title.string else ""
+        desc_tag = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
+        meta_desc = desc_tag.get("content", "").strip() if desc_tag else ""
+        h1_tags = [h.get_text(strip=True) for h in soup.find_all("h1")]
+        canonical = soup.find("link", rel="canonical")
+        canonical_url = canonical.get("href") if canonical else "Missing"
+        images = soup.find_all("img")
+        missing_alt = [img.get("src", "Unknown") for img in images if not img.get("alt") or img.get("alt").strip() == ""]
+        base_domain = tldextract.extract(target_url).registered_domain
+
+        internal_links, external_links = [], []
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            if href.startswith(("#", "javascript:", "mailto:", "tel:")) or not href:
+                continue
+            link_domain = tldextract.extract(href).registered_domain
+            if not link_domain or link_domain == base_domain:
+                internal_links.append(href)
+            else:
+                external_links.append(href)
+
+        # Deep Technical Diagnostics
+        tech_diag = audit_deep_technical(target_url, soup, internal_links, headers)
+
+        # Google PageSpeed
+        psi_data = get_google_pagespeed(target_url)
+
+        # Backlink Gap
+        gap_data = calculate_backlink_gap(competition_level)
+
+        # Google Sheet Sync (Webhook)
+        if GOOGLE_SHEET_WEBHOOK_URL and "script.google.com" in GOOGLE_SHEET_WEBHOOK_URL:
             try:
-                response = requests.get(target_url, headers=headers, timeout=15)
-                soup = BeautifulSoup(response.text, "html.parser")
-            except Exception as e:
-                st.error(f"Target website error: {e}")
-                st.stop()
+                sheet_payload = {
+                    "name": user_display_name,
+                    "email": email,
+                    "url": target_url,
+                    "keyword": active_keyword,
+                    "perf_score": psi_data['perf'],
+                    "seo_score": psi_data['seo'],
+                    "robots": tech_diag['robots'],
+                    "sitemap": tech_diag['sitemap'],
+                    "schema": tech_diag['schema'],
+                    "broken_links": tech_diag['broken_status']
+                }
+                requests.post(GOOGLE_SHEET_WEBHOOK_URL, json=sheet_payload, timeout=6)
+            except Exception:
+                pass
 
-            title = soup.title.string.strip() if soup.title and soup.title.string else ""
-            desc_tag = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
-            meta_desc = desc_tag.get("content", "").strip() if desc_tag else ""
-            h1_tags = [h.get_text(strip=True) for h in soup.find_all("h1")]
-            canonical = soup.find("link", rel="canonical")
-            canonical_url = canonical.get("href") if canonical else "Missing"
-            images = soup.find_all("img")
-            missing_alt = [img.get("src", "Unknown") for img in images if not img.get("alt") or img.get("alt").strip() == ""]
-            base_domain = tldextract.extract(target_url).registered_domain
+        st.success(f"Audit completed successfully for {user_display_name}!")
 
-            internal_links, external_links = [], []
-            for a in soup.find_all("a", href=True):
-                href = a["href"].strip()
-                if href.startswith(("#", "javascript:", "mailto:", "tel:")) or not href:
-                    continue
-                link_domain = tldextract.extract(href).registered_domain
-                if not link_domain or link_domain == base_domain:
-                    internal_links.append(href)
-                else:
-                    external_links.append(href)
+        # Metrics Row
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Performance", f"{psi_data['perf']}/100")
+        c2.metric("Lighthouse SEO", f"{psi_data['seo']}/100")
+        c3.metric("Broken Links Status", str(tech_diag['broken_count']) + " Broken")
+        c4.metric("Backlink Gap Est.", gap_data['gap_estimate'].split()[0])
 
-            # 1. Deep Technical Checks
-            tech_diag = audit_deep_technical(target_url, soup, internal_links, headers)
+        # Technical Output Box
+        st.markdown("### 🛠️ Deep Technical Diagnostics")
+        t_col1, t_col2 = st.columns(2)
+        with t_col1:
+            st.write(f"• **Robots.txt:** {tech_diag['robots']}")
+            st.write(f"• **XML Sitemap:** {tech_diag['sitemap']}")
+        with t_col2:
+            st.write(f"• **Schema Markup:** {tech_diag['schema']}")
+            st.write(f"• **Internal Link Integrity:** {tech_diag['broken_status']}")
 
-            # 2. Google PageSpeed
-            psi_data = get_google_pagespeed(target_url)
+        st.info(f"🎯 **Authority Gap for '{active_keyword}':** Niche competitors average **{gap_data['benchmark_rd']}**. We estimate an immediate requirement of **{gap_data['gap_estimate']}** to challenge top rankings.")
 
-            # 3. Backlink Gap
-            gap_data = calculate_backlink_gap(competition_level)
+        pdf_payload = {
+            'client': user_display_name,
+            'email': email,
+            'url': target_url,
+            'domain': base_domain,
+            'keyword': active_keyword,
+            'comp_tier': competition_level,
+            'gap_data': gap_data,
+            'tech_diag': tech_diag,
+            'psi': psi_data,
+            'ssl': 'Active (Secure)' if target_url.startswith('https') else 'Missing (Insecure)',
+            'canonical': canonical_url,
+            'title': title if title else "Not Specified",
+            'title_len': len(title),
+            'desc': meta_desc if meta_desc else "Not Specified",
+            'desc_len': len(meta_desc),
+            'h1_count': len(h1_tags),
+            'primary_h1': h1_tags[0] if h1_tags else "None detected",
+            'total_img': len(images),
+            'missing_alt': len(missing_alt),
+            'int_links': len(internal_links),
+            'ext_links': len(external_links)
+        }
 
-            # Auto-save lead to Google Sheet via Webhook
-            if GOOGLE_SHEET_WEBHOOK_URL and "script.google.com" in GOOGLE_SHEET_WEBHOOK_URL:
-                try:
-                    sheet_payload = {
-                        "name": user_display_name,
-                        "email": email,
-                        "url": target_url,
-                        "keyword": active_keyword,
-                        "perf_score": psi_data['perf'],
-                        "seo_score": psi_data['seo'],
-                        "robots": tech_diag['robots'],
-                        "sitemap": tech_diag['sitemap'],
-                        "schema": tech_diag['schema'],
-                        "broken_links": tech_diag['broken_status']
-                    }
-                    requests.post(GOOGLE_SHEET_WEBHOOK_URL, json=sheet_payload, timeout=6)
-                except Exception:
-                    pass
-
-            st.success(f"Audit completed successfully for {user_display_name}!")
-
-            # Metric Cards
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Performance", f"{psi_data['perf']}/100")
-            c2.metric("Lighthouse SEO", f"{psi_data['seo']}/100")
-            c3.metric("Broken Links Checked", tech_diag['broken_status'].split()[0])
-            c4.metric("Backlink Gap Est.", gap_data['gap_estimate'].split()[0])
-
-            # Deep Technical Findings Card
-            st.markdown("### 🛠️ Deep Technical Diagnostics")
-            t_col1, t_col2 = st.columns(2)
-            with t_col1:
-                st.write(f"• **Robots.txt:** {tech_diag['robots']}")
-                st.write(f"• **XML Sitemap:** {tech_diag['sitemap']}")
-            with t_col2:
-                st.write(f"• **Schema Markup:** {tech_diag['schema']}")
-                st.write(f"• **Internal Link Integrity:** {tech_diag['broken_status']}")
-
-            st.info(f"🎯 **Authority Gap for '{active_keyword}':** Niche competitors average **{gap_data['benchmark_rd']}**. We estimate an immediate requirement of **{gap_data['gap_estimate']}** to challenge top rankings.")
-
-            pdf_payload = {
-                'client': user_display_name,
-                'email': email,
-                'url': target_url,
-                'domain': base_domain,
-                'keyword': active_keyword,
-                'comp_tier': competition_level,
-                'gap_data': gap_data,
-                'tech_diag': tech_diag,
-                'psi': psi_data,
-                'ssl': 'Active (Secure)' if target_url.startswith('https') else 'Missing (Insecure)',
-                'canonical': canonical_url,
-                'title': title if title else "Not Specified",
-                'title_len': len(title),
-                'desc': meta_desc if meta_desc else "Not Specified",
-                'desc_len': len(meta_desc),
-                'h1_count': len(h1_tags),
-                'primary_h1': h1_tags[0] if h1_tags else "None detected",
-                'total_img': len(images),
-                'missing_alt': len(missing_alt),
-                'int_links': len(internal_links),
-                'ext_links': len(external_links)
-            }
-
-            pdf_file_bytes = build_pdf_report(pdf_payload)
-            st.download_button(
-                label="📥 Download Executive Visual SEO & Technical Audit (PDF)",
-                data=pdf_file_bytes,
-                file_name=f"SEO_Audit_Deep_{base_domain}.pdf",
-                mime="application/pdf"
-            )
+        pdf_file_bytes = build_pdf_report(pdf_payload)
+        st.download_button(
+            label="📥 Download Executive Visual SEO & Technical Audit (PDF)",
+            data=pdf_file_bytes,
+            file_name=f"SEO_Audit_Deep_{base_domain}.pdf",
+            mime="application/pdf"
+        )
