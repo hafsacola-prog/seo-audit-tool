@@ -22,7 +22,7 @@ AGENCY_WEBSITE = "https://rankcentre.net"
 AGENCY_ADDRESS = "Al Nahda St - Al Qusais Industrial Area - Al Qusais Industrial Area 3 - Sharjah, UNITED ARAB EMIRATES"
 
 # Google Sheet Webhook URL
-GOOGLE_SHEET_WEBHOOK_URL = "YAHAN_APNA_WEBHOOK_URL_PASTE_KAREIN"
+GOOGLE_SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwetciC31Q-zSgylj7cFxnMN1IUs-B_-bSq3Zfs1Je3AHomk8Qg-IHKlWy2xeI1pyGw4g/exec"
 
 st.set_page_config(page_title="Executive SEO & Technical Audit Engine", layout="wide")
 st.title("Agency SEO & Technical Audit Suite")
