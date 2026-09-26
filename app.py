@@ -118,9 +118,7 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
         s_res = requests.get(sitemap_url, headers=headers, timeout=5)
         if s_res.status_code == 200:
             if "= 400:
-                    get_res = requests.get(sl, headers=headers, timeout=3, stream=True)
-                    if get_res.status_code >= 400:
-                        broken_count += 1
+                    broken_count += 1
             except Exception:
                 broken_count += 1
 
@@ -214,7 +212,7 @@ def build_pdf_report(data):
     story.append(meta_table)
     story.append(Spacer(1, 5))
 
-    # 3. Overall Site Health & Visual Diagnostics
+    # 3. Health & Visual Diagnostics
     story.append(Paragraph("Executive Performance & Structural Diagnostics", sec_title))
     calc_perf = data['psi']['perf'] if isinstance(data['psi']['perf'], int) else 65
     calc_seo = data['psi']['seo'] if isinstance(data['psi']['seo'], int) else 75
@@ -253,7 +251,7 @@ def build_pdf_report(data):
     story.append(diag_table)
     story.append(Spacer(1, 5))
 
-    # 4. Deep Technical & Crawlability Diagnostics (NEW)
+    # 4. Deep Technical Diagnostics
     story.append(Paragraph("1. Deep Technical Crawlability & Architecture", sec_title))
     tech_diag = data['tech_diag']
     d_data = [
@@ -402,7 +400,7 @@ if submit_btn:
                 else:
                     external_links.append(href)
 
-            # 1. Deep Technical Checks (Robots, Sitemap, Schema, Broken Links)
+            # 1. Deep Technical Checks
             tech_diag = audit_deep_technical(target_url, soup, internal_links, headers)
 
             # 2. Google PageSpeed
