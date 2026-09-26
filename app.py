@@ -15,11 +15,11 @@ from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Tabl
 # ==========================================================
 # AGENCY BRANDING SETTINGS
 # ==========================================================
-AGENCY_NAME = "RankCentre SEO & Digital Outreach"
+AGENCY_NAME = "RankCentre SEO & Digital Marketing Expert"
 AGENCY_EMAIL = "contact@rankcentre.net"
-AGENCY_PHONE = "+92 300 1234567"
+AGENCY_PHONE = "+92 302 6264634"
 AGENCY_WEBSITE = "https://rankcentre.net"
-AGENCY_ADDRESS = "Office 402, Business Arcade, Lahore / Gujrat, Pakistan"
+AGENCY_ADDRESS = "Al Nahda St - Al Qusais Industrial Area - Al Qusais Industrial Area 3 - Sharjah, UNITED ARAB EMIRATES"
 
 # Google Sheet Webhook URL
 GOOGLE_SHEET_WEBHOOK_URL = "YAHAN_APNA_WEBHOOK_URL_PASTE_KAREIN"
