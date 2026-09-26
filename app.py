@@ -1,4 +1,5 @@
 import io
+import json
 import urllib.parse
 import matplotlib
 matplotlib.use('Agg')
@@ -24,12 +25,12 @@ AGENCY_ADDRESS = "Office 402, Business Arcade, Gujrat / Lahore, Pakistan"
 # Google Sheet Apps Script Webhook URL
 GOOGLE_SHEET_WEBHOOK_URL = "YAHAN_APNA_WEBHOOK_URL_PASTE_KAREIN"
 
-st.set_page_config(page_title="Executive SEO & Technical Audit Engine", layout="wide")
-st.title("Agency SEO & Technical Audit Suite")
-st.write("Enter website details, target keyword, and niche competition to generate an in-depth audit report with an automated Backlink Gap Analysis.")
+st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
+st.title("Agency Technical SEO & Authority Audit Suite")
+st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Links) and link-building gap analysis with 1-click executive PDF delivery.")
 
 def generate_health_donut_chart(overall_score):
-    fig, ax = plt.subplots(figsize=(2.4, 2.4), subplot_kw=dict(aspect="equal"))
+    fig, ax = plt.subplots(figsize=(2.2, 2.2), subplot_kw=dict(aspect="equal"))
     score = max(0, min(100, int(overall_score)))
     remaining = 100 - score
     chart_color = '#10B981' if score >= 80 else ('#F59E0B' if score >= 50 else '#EF4444')
@@ -41,8 +42,8 @@ def generate_health_donut_chart(overall_score):
         counterclock=False,
         wedgeprops=dict(width=0.35, edgecolor='white', linewidth=2)
     )
-    ax.text(0, 0, f"{score}%", ha='center', va='center', fontsize=20, fontweight='bold', color='#0F172A')
-    ax.text(0, -0.32, "HEALTH", ha='center', va='center', fontsize=8, fontweight='bold', color='#64748B')
+    ax.text(0, 0, f"{score}%", ha='center', va='center', fontsize=18, fontweight='bold', color='#0F172A')
+    ax.text(0, -0.32, "HEALTH", ha='center', va='center', fontsize=7.5, fontweight='bold', color='#64748B')
     
     buf = io.BytesIO()
     plt.tight_layout()
@@ -52,7 +53,7 @@ def generate_health_donut_chart(overall_score):
     return buf
 
 def generate_metrics_bar_chart(links_internal, links_external, img_total, img_missing):
-    fig, ax = plt.subplots(figsize=(3.8, 2.2))
+    fig, ax = plt.subplots(figsize=(3.6, 2.0))
     categories = ['Ext Links', 'Int Links', 'Missing ALT', 'Images']
     values = [links_external, links_internal, img_missing, img_total]
     bar_colors = ['#6366F1', '#3B82F6', '#EF4444' if img_missing > 0 else '#10B981', '#06B6D4']
@@ -62,13 +63,13 @@ def generate_metrics_bar_chart(links_internal, links_external, img_total, img_mi
     ax.spines['right'].set_visible(False)
     ax.spines['left'].set_color('#CBD5E1')
     ax.spines['bottom'].set_color('#CBD5E1')
-    ax.tick_params(axis='both', which='both', labelsize=8, colors='#475569')
+    ax.tick_params(axis='both', which='both', labelsize=7.5, colors='#475569')
     
     max_val = max(values) if values and max(values) > 0 else 1
     for bar in bars:
         width = bar.get_width()
         ax.text(width + (max_val * 0.03), bar.get_y() + bar.get_height() / 2,
-                f'{int(width)}', ha='left', va='center', fontsize=8, fontweight='bold', color='#1E293B')
+                f'{int(width)}', ha='left', va='center', fontsize=7.5, fontweight='bold', color='#1E293B')
     
     buf = io.BytesIO()
     plt.tight_layout()
@@ -92,6 +93,51 @@ def get_google_pagespeed(target_url):
         return {"perf": perf_score, "seo": seo_score, "fcp": fcp, "lcp": lcp, "cls": cls_val}
     except Exception:
         return {"perf": "N/A", "seo": "N/A", "fcp": "N/A", "lcp": "N/A", "cls": "N/A"}
+
+def audit_deep_technical(target_url, soup, internal_links, headers):
+    parsed = urllib.parse.urlparse(target_url)
+    base_root = f"{parsed.scheme}://{parsed.netloc}"
+    
+    # 1. Robots.txt Check
+    robots_url = urllib.parse.urljoin(base_root, "/robots.txt")
+    robots_status = "Missing (404 Not Found)"
+    try:
+        r_res = requests.get(robots_url, headers=headers, timeout=5)
+        if r_res.status_code == 200:
+            if "Disallow: /" in r_res.text and "\nDisallow: /\n" in r_res.text:
+                robots_status = "Warning: Sitewide Disallow Detected"
+            else:
+                robots_status = "Configured (200 OK)"
+    except Exception:
+        robots_status = "Connection Timed Out"
+
+    # 2. Sitemap.xml Check
+    sitemap_url = urllib.parse.urljoin(base_root, "/sitemap.xml")
+    sitemap_status = "Missing / Inaccessible"
+    try:
+        s_res = requests.get(sitemap_url, headers=headers, timeout=5)
+        if s_res.status_code == 200:
+            if "= 400:
+                    get_res = requests.get(sl, headers=headers, timeout=3, stream=True)
+                    if get_res.status_code >= 400:
+                        broken_count += 1
+            except Exception:
+                broken_count += 1
+
+    if len(sample_links) == 0:
+        broken_status = "No internal links found to test"
+    elif broken_count == 0:
+        broken_status = f"Healthy (0 broken of {len(sample_links)} tested)"
+    else:
+        broken_status = f"Alert: {broken_count} broken links of {len(sample_links)} tested"
+
+    return {
+        "robots": robots_status,
+        "sitemap": sitemap_status,
+        "schema": schema_status,
+        "broken_status": broken_status,
+        "broken_count": broken_count
+    }
 
 def calculate_backlink_gap(competition_tier):
     if "Low" in competition_tier:
@@ -118,7 +164,7 @@ def calculate_backlink_gap(competition_tier):
 
 def build_pdf_report(data):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=32, leftMargin=32, topMargin=32, bottomMargin=32)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=32, leftMargin=32, topMargin=28, bottomMargin=28)
     styles = getSampleStyleSheet()
 
     c_primary = colors.HexColor('#1E3A8A')
@@ -127,16 +173,16 @@ def build_pdf_report(data):
     c_light = colors.HexColor('#F8FAFC')
     c_border = colors.HexColor('#E2E8F0')
 
-    title_agency = ParagraphStyle('TAgency', parent=styles['Heading1'], fontSize=14, leading=17, fontName='Helvetica-Bold', textColor=c_primary)
-    agency_sub = ParagraphStyle('ASub', parent=styles['Normal'], fontSize=8, leading=10, textColor=c_slate)
-    sec_title = ParagraphStyle('STitle', parent=styles['Heading2'], fontSize=10, leading=13, fontName='Helvetica-Bold', textColor=c_dark, spaceBefore=5, spaceAfter=3)
-    cell_txt = ParagraphStyle('CTxt', parent=styles['Normal'], fontSize=7.5, leading=10, textColor=c_dark)
-    cell_bold = ParagraphStyle('CBld', parent=styles['Normal'], fontSize=7.5, leading=10, fontName='Helvetica-Bold', textColor=c_dark)
-    pitch_txt = ParagraphStyle('PTxt', parent=styles['Normal'], fontSize=7.5, leading=10.5, textColor=colors.HexColor('#1E3A8A'))
+    title_agency = ParagraphStyle('TAgency', parent=styles['Heading1'], fontSize=13, leading=16, fontName='Helvetica-Bold', textColor=c_primary)
+    agency_sub = ParagraphStyle('ASub', parent=styles['Normal'], fontSize=7.5, leading=9.5, textColor=c_slate)
+    sec_title = ParagraphStyle('STitle', parent=styles['Heading2'], fontSize=9.5, leading=12, fontName='Helvetica-Bold', textColor=c_dark, spaceBefore=4, spaceAfter=2)
+    cell_txt = ParagraphStyle('CTxt', parent=styles['Normal'], fontSize=7, leading=9, textColor=c_dark)
+    cell_bold = ParagraphStyle('CBld', parent=styles['Normal'], fontSize=7, leading=9, fontName='Helvetica-Bold', textColor=c_dark)
+    pitch_txt = ParagraphStyle('PTxt', parent=styles['Normal'], fontSize=7, leading=9.5, textColor=colors.HexColor('#1E3A8A'))
 
     story = []
 
-    # 1. Clean Agency Letterhead Table
+    # 1. Header
     header_table_data = [
         [Paragraph(AGENCY_NAME, title_agency), Paragraph("Email:", cell_bold), Paragraph(AGENCY_EMAIL, agency_sub)],
         [Paragraph("Search Engine Optimization & Outreach Consultancy", agency_sub), Paragraph("Phone:", cell_bold), Paragraph(AGENCY_PHONE, agency_sub)],
@@ -146,11 +192,11 @@ def build_pdf_report(data):
     hdr_table = Table(header_table_data, colWidths=[290, 50, 208])
     hdr_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('LINEBELOW', (0, -1), (-1, -1), 1.5, c_primary),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+        ('LINEBELOW', (0, -1), (-1, -1), 1.2, c_primary),
     ]))
     story.append(hdr_table)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 5))
 
     # 2. Metadata Info
     meta_info = [
@@ -161,12 +207,12 @@ def build_pdf_report(data):
     meta_table = Table(meta_info, colWidths=[75, 200, 75, 198])
     meta_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), c_light),
-        ('PADDING', (0, 0), (-1, -1), 3.5),
+        ('PADDING', (0, 0), (-1, -1), 3),
         ('BOX', (0, 0), (-1, -1), 0.5, c_border),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#F1F5F9')),
     ]))
     story.append(meta_table)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 5))
 
     # 3. Overall Site Health & Visual Diagnostics
     story.append(Paragraph("Executive Performance & Structural Diagnostics", sec_title))
@@ -178,11 +224,11 @@ def build_pdf_report(data):
 
     donut_chart_buffer = generate_health_donut_chart(calculated_health)
     bar_chart_buffer = generate_metrics_bar_chart(data['int_links'], data['ext_links'], data['total_img'], data['missing_alt'])
-    donut_img = Image(donut_chart_buffer, width=105, height=105)
-    bar_img = Image(bar_chart_buffer, width=180, height=105)
+    donut_img = Image(donut_chart_buffer, width=95, height=95)
+    bar_img = Image(bar_chart_buffer, width=175, height=95)
 
     verdict_subtable_data = [
-        [Paragraph("Audit Verdict Summary", cell_bold), Paragraph("", cell_txt)],
+        [Paragraph("Audit Summary", cell_bold), Paragraph("", cell_txt)],
         [Paragraph("Mobile Performance:", cell_txt), Paragraph(f"{data['psi']['perf']}/100", cell_bold)],
         [Paragraph("Lighthouse SEO:", cell_txt), Paragraph(f"{data['psi']['seo']}/100", cell_bold)],
         [Paragraph("HTTPS Security:", cell_txt), Paragraph(data['ssl'], cell_txt)],
@@ -190,25 +236,44 @@ def build_pdf_report(data):
     ]
     verdict_subtable = Table(verdict_subtable_data, colWidths=[105, 95])
     verdict_subtable.setStyle(TableStyle([
-        ('PADDING', (0, 0), (-1, -1), 1.5),
+        ('PADDING', (0, 0), (-1, -1), 1),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
 
     health_summary_card = [[donut_img, verdict_subtable, bar_img]]
-    diag_table = Table(health_summary_card, colWidths=[115, 210, 223])
+    diag_table = Table(health_summary_card, colWidths=[110, 210, 228])
     diag_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), c_light),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (0, 0), 'CENTER'),
         ('ALIGN', (2, 0), (2, 0), 'CENTER'),
-        ('PADDING', (0, 0), (-1, -1), 3),
+        ('PADDING', (0, 0), (-1, -1), 2.5),
         ('BOX', (0, 0), (-1, -1), 0.5, c_border),
     ]))
     story.append(diag_table)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 5))
 
-    # 4. Technical & On-Page Summary Table
-    story.append(Paragraph("1. Technical Baseline & On-Page Tags", sec_title))
+    # 4. Deep Technical & Crawlability Diagnostics (NEW)
+    story.append(Paragraph("1. Deep Technical Crawlability & Architecture", sec_title))
+    tech_diag = data['tech_diag']
+    d_data = [
+        [Paragraph("Technical Parameter", cell_bold), Paragraph("Observed Status", cell_bold), Paragraph("Health Benchmark", cell_bold)],
+        [Paragraph("Robots.txt Status", cell_txt), Paragraph(tech_diag['robots'], cell_txt), Paragraph("200 OK without Sitewide Disallow", cell_txt)],
+        [Paragraph("XML Sitemap Status", cell_txt), Paragraph(tech_diag['sitemap'], cell_txt), Paragraph("Valid sitemap.xml required for indexing", cell_txt)],
+        [Paragraph("Schema Markup (JSON-LD)", cell_txt), Paragraph(tech_diag['schema'], cell_txt), Paragraph("Rich Snippet structured data enabled", cell_txt)],
+        [Paragraph("Internal Link Integrity", cell_txt), Paragraph(tech_diag['broken_status'], cell_txt), Paragraph("Zero 404 broken links on critical pages", cell_txt)]
+    ]
+    d_table = Table(d_data, colWidths=[130, 220, 198])
+    d_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EEF2F6')),
+        ('PADDING', (0, 0), (-1, -1), 2.5),
+        ('GRID', (0, 0), (-1, -1), 0.5, c_border),
+    ]))
+    story.append(d_table)
+    story.append(Spacer(1, 5))
+
+    # 5. On-Page Optimization
+    story.append(Paragraph("2. On-Page Optimization & Core Web Vitals", sec_title))
     tech_data = [
         [Paragraph("Audit Check", cell_bold), Paragraph("Observed Value", cell_bold), Paragraph("Optimization Status", cell_bold)],
         [Paragraph("Page Title", cell_txt), Paragraph(f"{data['title'][:45]}... ({data['title_len']} chars)", cell_txt), Paragraph("Optimal" if 50 <= data['title_len'] <= 60 else "Review Length (50-60 chars)", cell_txt)],
@@ -217,40 +282,40 @@ def build_pdf_report(data):
         [Paragraph("Core Web Vitals LCP", cell_txt), Paragraph(str(data['psi']['lcp']), cell_txt), Paragraph("Target under 2.5s", cell_txt)],
         [Paragraph("Image ALT Attributes", cell_txt), Paragraph(f"{data['missing_alt']} of {data['total_img']} images missing ALT", cell_txt), Paragraph("Optimal" if data['missing_alt'] == 0 else "Optimize ALT tags", cell_txt)]
     ]
-    tech_table = Table(tech_data, colWidths=[130, 240, 178])
+    tech_table = Table(tech_data, colWidths=[130, 220, 198])
     tech_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EEF2F6')),
-        ('PADDING', (0, 0), (-1, -1), 3),
+        ('PADDING', (0, 0), (-1, -1), 2.5),
         ('GRID', (0, 0), (-1, -1), 0.5, c_border),
     ]))
     story.append(tech_table)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 5))
 
-    # 5. Dedicated Off-Page & Link-Building Gap Analysis
-    story.append(Paragraph("2. Off-Page Authority & Link-Building Gap Analysis", sec_title))
+    # 6. Off-Page Backlink Gap Analysis
+    story.append(Paragraph("3. Off-Page Authority & Link-Building Gap", sec_title))
     gap = data['gap_data']
     gap_table_data = [
         [Paragraph("Authority Parameter", cell_bold), Paragraph("Audit Finding & Benchmark", cell_bold)],
-        [Paragraph("Target Keyword Target", cell_txt), Paragraph(f"**{data['keyword']}** (Competitiveness: {gap['tier']})", cell_txt)],
-        [Paragraph("Page 1 RD Benchmark", cell_txt), Paragraph(f"Top ranking competitors average **{gap['benchmark_rd']}**", cell_txt)],
-        [Paragraph("Estimated Backlink Gap", cell_txt), Paragraph(f"Estimated requirement: **{gap['gap_estimate']}** to challenge Page 1", cell_txt)],
+        [Paragraph("Target Keyword Target", cell_txt), Paragraph(f"{data['keyword']} (Competitiveness: {gap['tier']})", cell_txt)],
+        [Paragraph("Page 1 RD Benchmark", cell_txt), Paragraph(f"Top ranking competitors average {gap['benchmark_rd']}", cell_txt)],
+        [Paragraph("Estimated Backlink Gap", cell_txt), Paragraph(f"Estimated requirement: {gap['gap_estimate']} to challenge Page 1", cell_txt)],
         [Paragraph("Outreach Action Strategy", cell_txt), Paragraph(gap['strategy'], cell_txt)]
     ]
     gap_table = Table(gap_table_data, colWidths=[150, 398])
     gap_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EEF2F6')),
-        ('PADDING', (0, 0), (-1, -1), 3.5),
+        ('PADDING', (0, 0), (-1, -1), 2.5),
         ('GRID', (0, 0), (-1, -1), 0.5, c_border),
     ]))
     story.append(gap_table)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 5))
 
-    # 6. Strategic Outreach Pitch & Solution Roadmap
+    # 7. Outreach Pitch Box
     pitch_header = f"Ready to Close Your Authority Gap? {AGENCY_NAME} Outreach Solution"
     pitch_details = (
-        f"Technical fixes create ranking eligibility, but authoritative backlinks drive top positions. "
-        f"We provide customized outreach campaigns, securing contextual dofollow guest posts on real traffic-verified domains (DR 40 to 80+). "
-        f"Contact our outreach desk at {AGENCY_EMAIL} or WhatsApp {AGENCY_PHONE} for a tailored link-building plan."
+        f"Technical fixes establish crawling readiness, but authoritative backlinks drive top positions. "
+        f"We execute tailored outreach campaigns, securing contextual dofollow guest posts on genuine traffic-verified domains (DR 40 to 80+). "
+        f"Contact our outreach team at {AGENCY_EMAIL} or WhatsApp {AGENCY_PHONE} for a customized link-building campaign."
     )
     pitch_card = [
         [Paragraph(f"**{pitch_header}**", pitch_txt)],
@@ -259,7 +324,7 @@ def build_pdf_report(data):
     pitch_table = Table(pitch_card, colWidths=[548])
     pitch_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#EFF6FF')),
-        ('PADDING', (0, 0), (-1, -1), 5),
+        ('PADDING', (0, 0), (-1, -1), 4.5),
         ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#3B82F6')),
     ]))
     story.append(pitch_table)
@@ -293,7 +358,7 @@ with st.form("audit_form"):
             ["Medium Competition (Standard Commercial Niche)", "Low Competition (Local / Micro-Niche)", "High Competition (Global / Finance / SaaS)"]
         )
         
-    submit_btn = st.form_submit_button("Generate Full Audit & Backlink Gap Report")
+    submit_btn = st.form_submit_button("Generate Complete Technical & Authority Audit")
 
 if submit_btn:
     if not email.strip() or "@" not in email or "." not in email:
@@ -307,7 +372,7 @@ if submit_btn:
         user_display_name = f"{first_name} {last_name}".strip() if (first_name or last_name) else "Website Owner"
         active_keyword = target_keyword.strip() if target_keyword.strip() else "Core Industry Keyword"
 
-        with st.spinner(f"Auditing {target_url} and analyzing backlink gap..."):
+        with st.spinner(f"Crawling {target_url} (Checking Robots, Sitemap, Schema, Broken Links)..."):
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
             try:
                 response = requests.get(target_url, headers=headers, timeout=15)
@@ -337,7 +402,13 @@ if submit_btn:
                 else:
                     external_links.append(href)
 
+            # 1. Deep Technical Checks (Robots, Sitemap, Schema, Broken Links)
+            tech_diag = audit_deep_technical(target_url, soup, internal_links, headers)
+
+            # 2. Google PageSpeed
             psi_data = get_google_pagespeed(target_url)
+
+            # 3. Backlink Gap
             gap_data = calculate_backlink_gap(competition_level)
 
             # Auto-save lead to Google Sheet via Webhook
@@ -350,23 +421,35 @@ if submit_btn:
                         "keyword": active_keyword,
                         "perf_score": psi_data['perf'],
                         "seo_score": psi_data['seo'],
-                        "h1_count": len(h1_tags),
-                        "missing_alt": len(missing_alt)
+                        "robots": tech_diag['robots'],
+                        "sitemap": tech_diag['sitemap'],
+                        "schema": tech_diag['schema'],
+                        "broken_links": tech_diag['broken_status']
                     }
                     requests.post(GOOGLE_SHEET_WEBHOOK_URL, json=sheet_payload, timeout=6)
                 except Exception:
                     pass
 
-            st.success(f"Audit & Backlink Gap completed successfully for {user_display_name}!")
+            st.success(f"Audit completed successfully for {user_display_name}!")
 
+            # Metric Cards
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Performance", f"{psi_data['perf']}/100")
             c2.metric("Lighthouse SEO", f"{psi_data['seo']}/100")
-            c3.metric("Target Keyword", active_keyword[:18])
+            c3.metric("Broken Links Checked", tech_diag['broken_status'].split()[0])
             c4.metric("Backlink Gap Est.", gap_data['gap_estimate'].split()[0])
 
-            # Backlink Gap Card in Streamlit UI
-            st.info(f"🎯 **Authority Gap Summary for '{active_keyword}':** Competitors in this category typically hold **{gap_data['benchmark_rd']}**. We estimate an immediate need for **{gap_data['gap_estimate']}** to gain ranking traction.")
+            # Deep Technical Findings Card
+            st.markdown("### 🛠️ Deep Technical Diagnostics")
+            t_col1, t_col2 = st.columns(2)
+            with t_col1:
+                st.write(f"• **Robots.txt:** {tech_diag['robots']}")
+                st.write(f"• **XML Sitemap:** {tech_diag['sitemap']}")
+            with t_col2:
+                st.write(f"• **Schema Markup:** {tech_diag['schema']}")
+                st.write(f"• **Internal Link Integrity:** {tech_diag['broken_status']}")
+
+            st.info(f"🎯 **Authority Gap for '{active_keyword}':** Niche competitors average **{gap_data['benchmark_rd']}**. We estimate an immediate requirement of **{gap_data['gap_estimate']}** to challenge top rankings.")
 
             pdf_payload = {
                 'client': user_display_name,
@@ -376,6 +459,7 @@ if submit_btn:
                 'keyword': active_keyword,
                 'comp_tier': competition_level,
                 'gap_data': gap_data,
+                'tech_diag': tech_diag,
                 'psi': psi_data,
                 'ssl': 'Active (Secure)' if target_url.startswith('https') else 'Missing (Insecure)',
                 'canonical': canonical_url,
@@ -393,8 +477,8 @@ if submit_btn:
 
             pdf_file_bytes = build_pdf_report(pdf_payload)
             st.download_button(
-                label="📥 Download Executive Visual SEO & Backlink Gap Report (PDF)",
+                label="📥 Download Executive Visual SEO & Technical Audit (PDF)",
                 data=pdf_file_bytes,
-                file_name=f"SEO_Audit_Gap_{base_domain}.pdf",
+                file_name=f"SEO_Audit_Deep_{base_domain}.pdf",
                 mime="application/pdf"
             )
