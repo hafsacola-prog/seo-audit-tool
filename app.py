@@ -22,18 +22,25 @@ AGENCY_PHONE = "+92 302 6264634"
 AGENCY_WEBSITE = "https://rankcentre.net"
 AGENCY_ADDRESS = "Office 402, Business Arcade, Gujrat / Lahore, Pakistan"
 
-# Google Sheet Apps Script Webhook URL (Optional)
-GOOGLE_SHEET_WEBHOOK_URL = "YAHAN_APNA_WEBHOOK_URL_PASTE_KAREIN"
-
 st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
 st.title("Agency Technical SEO & Authority Audit Suite")
 st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Links) and link-building gap analysis with 1-click executive PDF delivery.")
 
 def generate_health_donut_chart(overall_score):
     fig, ax = plt.subplots(figsize=(2.2, 2.2), subplot_kw=dict(aspect="equal"))
-    score = max(0, min(100, int(overall_score)))
+    score = int(overall_score)
+    if score < 0:
+        score = 0
+    if score > 100:
+        score = 100
     remaining = 100 - score
-    chart_color = '#10B981' if score >= 80 else ('#F59E0B' if score >= 50 else '#EF4444')
+    
+    if score >= 80:
+        chart_color = '#10B981'
+    elif score >= 50:
+        chart_color = '#F59E0B'
+    else:
+        chart_color = '#EF4444'
     
     ax.pie(
         [score, remaining],
@@ -42,7 +49,7 @@ def generate_health_donut_chart(overall_score):
         counterclock=False,
         wedgeprops=dict(width=0.35, edgecolor='white', linewidth=2)
     )
-    ax.text(0, 0, f"{score}%", ha='center', va='center', fontsize=18, fontweight='bold', color='#0F172A')
+    ax.text(0, 0, str(score) + "%", ha='center', va='center', fontsize=18, fontweight='bold', color='#0F172A')
     ax.text(0, -0.32, "HEALTH", ha='center', va='center', fontsize=7.5, fontweight='bold', color='#64748B')
     
     buf = io.BytesIO()
@@ -56,7 +63,11 @@ def generate_metrics_bar_chart(links_internal, links_external, img_total, img_mi
     fig, ax = plt.subplots(figsize=(3.6, 2.0))
     categories = ['Ext Links', 'Int Links', 'Missing ALT', 'Images']
     values = [links_external, links_internal, img_missing, img_total]
-    bar_colors = ['#6366F1', '#3B82F6', '#EF4444' if img_missing > 0 else '#10B981', '#06B6D4']
+    
+    missing_color = '#10B981'
+    if img_missing > 0:
+        missing_color = '#EF4444'
+    bar_colors = ['#6366F1', '#3B82F6', missing_color, '#06B6D4']
     
     bars = ax.barh(categories, values, color=bar_colors, height=0.55)
     ax.spines['top'].set_visible(False)
@@ -65,11 +76,14 @@ def generate_metrics_bar_chart(links_internal, links_external, img_total, img_mi
     ax.spines['bottom'].set_color('#CBD5E1')
     ax.tick_params(axis='both', which='both', labelsize=7.5, colors='#475569')
     
-    max_val = max(values) if values and max(values) > 0 else 1
+    max_val = 1
+    if values and max(values) > 0:
+        max_val = max(values)
+        
     for bar in bars:
         width = bar.get_width()
         ax.text(width + (max_val * 0.03), bar.get_y() + bar.get_height() / 2,
-                f'{int(width)}', ha='left', va='center', fontsize=7.5, fontweight='bold', color='#1E293B')
+                str(int(width)), ha='left', va='center', fontsize=7.5, fontweight='bold', color='#1E293B')
     
     buf = io.BytesIO()
     plt.tight_layout()
@@ -84,8 +98,13 @@ def get_google_pagespeed(target_url):
         res = requests.get(endpoint, timeout=30).json()
         lighthouse = res.get("lighthouseResult", {})
         cats = lighthouse.get("categories", {})
-        perf_score = int(cats.get("performance", {}).get("score", 0) * 100) if cats.get("performance") else "N/A"
-        seo_score = int(cats.get("seo", {}).get("score", 0) * 100) if cats.get("seo") else "N/A"
+        perf_score = "N/A"
+        seo_score = "N/A"
+        if cats.get("performance"):
+            perf_score = int(cats.get("performance", {}).get("score", 0) * 100)
+        if cats.get("seo"):
+            seo_score = int(cats.get("seo", {}).get("score", 0) * 100)
+            
         audits = lighthouse.get("audits", {})
         fcp = audits.get("first-contentful-paint", {}).get("displayValue", "N/A")
         lcp = audits.get("largest-contentful-paint", {}).get("displayValue", "N/A")
@@ -102,7 +121,7 @@ def check_broken_links(internal_links, base_url, headers):
             clean_internals.append(full_l)
 
     sample = clean_internals[:10]
-    if not sample:
+    if len(sample) == 0:
         return "No internal links found to test", 0
 
     broken = 0
@@ -110,9 +129,9 @@ def check_broken_links(internal_links, base_url, headers):
         try:
             res = requests.get(link, headers=headers, timeout=4, stream=True)
             if res.status_code >= 400:
-                broken += 1
+                broken = broken + 1
         except Exception:
-            broken += 1
+            broken = broken + 1
 
     if broken == 0:
         return f"Healthy (0 broken of {len(sample)} tested)", 0
@@ -128,7 +147,7 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
     try:
         r_res = requests.get(robots_url, headers=headers, timeout=5)
         if r_res.status_code == 200:
-            if "Disallow: /" in r_res.text and "\nDisallow: /\n" in r_res.text:
+            if "Disallow: /" in r_res.text:
                 robots_status = "Warning: Sitewide Disallow Detected"
             else:
                 robots_status = "Configured (200 OK)"
@@ -141,8 +160,117 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
     try:
         s_res = requests.get(sitemap_url, headers=headers, timeout=5)
         if s_res.status_code == 200:
-            if " 0 else 0
-    calc_health = max(10, int(((calc_perf * 0.4) + (calc_seo * 0.6)) - h1_pen - img_pen))
+            if " 0:
+        unique_schemas = list(dict.fromkeys(schemas_detected))
+        schema_status = f"Detected: {', '.join(unique_schemas[:3])}"
+    elif len(schema_tags) > 0:
+        schema_status = "JSON-LD Tag Present"
+    else:
+        schema_status = "Missing (No JSON-LD Detected)"
+
+    broken_status, broken_count = check_broken_links(internal_links, target_url, headers)
+
+    return {
+        "robots": robots_status,
+        "sitemap": sitemap_status,
+        "schema": schema_status,
+        "broken_status": broken_status,
+        "broken_count": broken_count
+    }
+
+def calculate_backlink_gap(competition_tier):
+    if "Low" in competition_tier:
+        return {
+            "tier": "Low Competition / Local Niche",
+            "benchmark_rd": "15 - 35 Referring Domains",
+            "gap_estimate": "10 - 25 High-Quality Backlinks",
+            "strategy": "Local citations, foundational niche backlinks, and 2-3 guest posts per month."
+        }
+    if "High" in competition_tier:
+        return {
+            "tier": "High Competition / Global Niche",
+            "benchmark_rd": "120 - 300+ Referring Domains",
+            "gap_estimate": "60 - 150+ High-Authority Backlinks (DR 50+)",
+            "strategy": "Aggressive guest outreach, digital PR, resource-page link building, and tiered contextual links."
+        }
+    return {
+        "tier": "Medium Competition / Standard Commercial Niche",
+        "benchmark_rd": "45 - 90 Referring Domains",
+        "gap_estimate": "30 - 50 Contextual Editorial Links",
+        "strategy": "Niche-relevant guest blogging on DR 40-70 sites with contextual anchors."
+    }
+
+def build_pdf_report(data):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=32, leftMargin=32, topMargin=28, bottomMargin=28)
+    styles = getSampleStyleSheet()
+
+    c_primary = colors.HexColor('#1E3A8A')
+    c_dark = colors.HexColor('#0F172A')
+    c_slate = colors.HexColor('#475569')
+    c_light = colors.HexColor('#F8FAFC')
+    c_border = colors.HexColor('#E2E8F0')
+
+    title_agency = ParagraphStyle('TAgency', parent=styles['Heading1'], fontSize=13, leading=16, fontName='Helvetica-Bold', textColor=c_primary)
+    agency_sub = ParagraphStyle('ASub', parent=styles['Normal'], fontSize=7.5, leading=9.5, textColor=c_slate)
+    sec_title = ParagraphStyle('STitle', parent=styles['Heading2'], fontSize=9.5, leading=12, fontName='Helvetica-Bold', textColor=c_dark, spaceBefore=4, spaceAfter=2)
+    cell_txt = ParagraphStyle('CTxt', parent=styles['Normal'], fontSize=7, leading=9, textColor=c_dark)
+    cell_bold = ParagraphStyle('CBld', parent=styles['Normal'], fontSize=7, leading=9, fontName='Helvetica-Bold', textColor=c_dark)
+    pitch_txt = ParagraphStyle('PTxt', parent=styles['Normal'], fontSize=7, leading=9.5, textColor=colors.HexColor('#1E3A8A'))
+
+    story = []
+
+    # Header
+    header_table_data = [
+        [Paragraph(AGENCY_NAME, title_agency), Paragraph("Email:", cell_bold), Paragraph(AGENCY_EMAIL, agency_sub)],
+        [Paragraph("Search Engine Optimization & Outreach Consultancy", agency_sub), Paragraph("Phone:", cell_bold), Paragraph(AGENCY_PHONE, agency_sub)],
+        [Paragraph("", agency_sub), Paragraph("Website:", cell_bold), Paragraph(AGENCY_WEBSITE, agency_sub)],
+        [Paragraph("", agency_sub), Paragraph("HQ:", cell_bold), Paragraph(AGENCY_ADDRESS, agency_sub)]
+    ]
+    hdr_table = Table(header_table_data, colWidths=[290, 50, 208])
+    hdr_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+        ('LINEBELOW', (0, -1), (-1, -1), 1.2, c_primary),
+    ]))
+    story.append(hdr_table)
+    story.append(Spacer(1, 5))
+
+    # Meta
+    meta_info = [
+        [Paragraph("Target URL:", cell_bold), Paragraph(data['url'], cell_txt), Paragraph("Client Contact:", cell_bold), Paragraph(data['client'], cell_txt)],
+        [Paragraph("Root Domain:", cell_bold), Paragraph(data['domain'], cell_txt), Paragraph("Client Email:", cell_bold), Paragraph(data['email'], cell_txt)],
+        [Paragraph("Target Keyword:", cell_bold), Paragraph(data['keyword'], cell_txt), Paragraph("Niche Competition:", cell_bold), Paragraph(data['comp_tier'], cell_txt)]
+    ]
+    meta_table = Table(meta_info, colWidths=[75, 200, 75, 198])
+    meta_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), c_light),
+        ('PADDING', (0, 0), (-1, -1), 3),
+        ('BOX', (0, 0), (-1, -1), 0.5, c_border),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#F1F5F9')),
+    ]))
+    story.append(meta_table)
+    story.append(Spacer(1, 5))
+
+    # Diagnostics Calculation
+    calc_perf = 65
+    if isinstance(data['psi']['perf'], int):
+        calc_perf = data['psi']['perf']
+        
+    calc_seo = 75
+    if isinstance(data['psi']['seo'], int):
+        calc_seo = data['psi']['seo']
+        
+    h1_pen = 0
+    if data['h1_count'] != 1:
+        h1_pen = 15
+        
+    img_pen = 0
+    if data['missing_alt'] > 0:
+        img_pen = 10
+        
+    raw_health = int(((calc_perf * 0.4) + (calc_seo * 0.6)) - h1_pen - img_pen)
+    calc_health = max(10, raw_health)
 
     donut_chart_buffer = generate_health_donut_chart(calc_health)
     bar_chart_buffer = generate_metrics_bar_chart(data['int_links'], data['ext_links'], data['total_img'], data['missing_alt'])
@@ -151,8 +279,8 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
 
     verdict_subtable_data = [
         [Paragraph("Audit Summary", cell_bold), Paragraph("", cell_txt)],
-        [Paragraph("Mobile Performance:", cell_txt), Paragraph(f"{data['psi']['perf']}/100", cell_bold)],
-        [Paragraph("Lighthouse SEO:", cell_txt), Paragraph(f"{data['psi']['seo']}/100", cell_bold)],
+        [Paragraph("Mobile Performance:", cell_txt), Paragraph(str(data['psi']['perf']) + "/100", cell_bold)],
+        [Paragraph("Lighthouse SEO:", cell_txt), Paragraph(str(data['psi']['seo']) + "/100", cell_bold)],
         [Paragraph("HTTPS Security:", cell_txt), Paragraph(data['ssl'], cell_txt)],
         [Paragraph("Canonical Mapping:", cell_txt), Paragraph(data['canonical'], cell_txt)]
     ]
@@ -162,6 +290,7 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
 
+    story.append(Paragraph("Executive Performance & Structural Diagnostics", sec_title))
     health_summary_card = [[donut_img, verdict_subtable, bar_img]]
     diag_table = Table(health_summary_card, colWidths=[110, 210, 228])
     diag_table.setStyle(TableStyle([
@@ -196,13 +325,29 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
 
     # On-Page Table
     story.append(Paragraph("2. On-Page Optimization & Core Web Vitals", sec_title))
+    title_status = "Optimal"
+    if not (50 <= data['title_len'] <= 60):
+        title_status = "Review Length (50-60 chars)"
+        
+    desc_status = "Optimal"
+    if not (140 <= data['desc_len'] <= 160):
+        desc_status = "Adjust to 140-160 chars"
+        
+    h1_status = "Optimal"
+    if data['h1_count'] != 1:
+        h1_status = f"Warning: {data['h1_count']} H1 detected"
+        
+    alt_status = "Optimal"
+    if data['missing_alt'] > 0:
+        alt_status = "Optimize ALT tags"
+
     tech_data = [
         [Paragraph("Audit Check", cell_bold), Paragraph("Observed Value", cell_bold), Paragraph("Optimization Status", cell_bold)],
-        [Paragraph("Page Title", cell_txt), Paragraph(f"{data['title'][:45]}... ({data['title_len']} chars)", cell_txt), Paragraph("Optimal" if 50 <= data['title_len'] <= 60 else "Review Length (50-60 chars)", cell_txt)],
-        [Paragraph("Meta Description", cell_txt), Paragraph(f"{data['desc'][:45]}... ({data['desc_len']} chars)", cell_txt), Paragraph("Optimal" if 140 <= data['desc_len'] <= 160 else "Adjust to 140-160 chars", cell_txt)],
-        [Paragraph("Primary H1 Tag", cell_txt), Paragraph(data['primary_h1'][:50] if data['primary_h1'] else "None detected", cell_txt), Paragraph("Optimal" if data['h1_count'] == 1 else f"Warning: {data['h1_count']} H1 detected", cell_txt)],
+        [Paragraph("Page Title", cell_txt), Paragraph(f"{data['title'][:45]}... ({data['title_len']} chars)", cell_txt), Paragraph(title_status, cell_txt)],
+        [Paragraph("Meta Description", cell_txt), Paragraph(f"{data['desc'][:45]}... ({data['desc_len']} chars)", cell_txt), Paragraph(desc_status, cell_txt)],
+        [Paragraph("Primary H1 Tag", cell_txt), Paragraph(data['primary_h1'][:50], cell_txt), Paragraph(h1_status, cell_txt)],
         [Paragraph("Core Web Vitals LCP", cell_txt), Paragraph(str(data['psi']['lcp']), cell_txt), Paragraph("Target under 2.5s", cell_txt)],
-        [Paragraph("Image ALT Attributes", cell_txt), Paragraph(f"{data['missing_alt']} of {data['total_img']} images missing ALT", cell_txt), Paragraph("Optimal" if data['missing_alt'] == 0 else "Optimize ALT tags", cell_txt)]
+        [Paragraph("Image ALT Attributes", cell_txt), Paragraph(f"{data['missing_alt']} of {data['total_img']} images missing ALT", cell_txt), Paragraph(alt_status, cell_txt)]
     ]
     tech_table = Table(tech_data, colWidths=[130, 220, 198])
     tech_table.setStyle(TableStyle([
@@ -295,8 +440,14 @@ if submit_btn:
     if not target_url.startswith("http"):
         target_url = "https://" + target_url
     
-    user_display_name = f"{first_name} {last_name}".strip() if (first_name or last_name) else "Website Owner"
-    active_keyword = target_keyword.strip() if target_keyword.strip() else "Core Industry Keyword"
+    name_str = f"{first_name} {last_name}".strip()
+    user_display_name = "Website Owner"
+    if len(name_str) > 0:
+        user_display_name = name_str
+        
+    active_keyword = "Core Industry Keyword"
+    if len(target_keyword.strip()) > 0:
+        active_keyword = target_keyword.strip()
 
     with st.spinner(f"Crawling {target_url} (Checking Robots, Sitemap, Schema, Broken Links)..."):
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -307,17 +458,32 @@ if submit_btn:
             st.error(f"Target website error: {e}")
             st.stop()
 
-        title = soup.title.string.strip() if soup.title and soup.title.string else ""
+        title = ""
+        if soup.title and soup.title.string:
+            title = soup.title.string.strip()
+            
         desc_tag = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
-        meta_desc = desc_tag.get("content", "").strip() if desc_tag else ""
+        meta_desc = ""
+        if desc_tag and desc_tag.get("content"):
+            meta_desc = desc_tag.get("content").strip()
+            
         h1_tags = [h.get_text(strip=True) for h in soup.find_all("h1")]
         canonical = soup.find("link", rel="canonical")
-        canonical_url = canonical.get("href") if canonical else "Missing"
+        canonical_url = "Missing"
+        if canonical and canonical.get("href"):
+            canonical_url = canonical.get("href")
+            
         images = soup.find_all("img")
-        missing_alt = [img.get("src", "Unknown") for img in images if not img.get("alt") or img.get("alt").strip() == ""]
+        missing_alt = []
+        for img in images:
+            alt_val = img.get("alt")
+            if not alt_val or alt_val.strip() == "":
+                missing_alt.append(img.get("src", "Unknown"))
+                
         base_domain = tldextract.extract(target_url).registered_domain
 
-        internal_links, external_links = [], []
+        internal_links = []
+        external_links = []
         for a in soup.find_all("a", href=True):
             href = a["href"].strip()
             if href.startswith(("#", "javascript:", "mailto:", "tel:")) or not href:
@@ -336,25 +502,6 @@ if submit_btn:
 
         # Backlink Gap
         gap_data = calculate_backlink_gap(competition_level)
-
-        # Google Sheet Sync (Webhook)
-        if GOOGLE_SHEET_WEBHOOK_URL and "script.google.com" in GOOGLE_SHEET_WEBHOOK_URL:
-            try:
-                sheet_payload = {
-                    "name": user_display_name,
-                    "email": email,
-                    "url": target_url,
-                    "keyword": active_keyword,
-                    "perf_score": psi_data['perf'],
-                    "seo_score": psi_data['seo'],
-                    "robots": tech_diag['robots'],
-                    "sitemap": tech_diag['sitemap'],
-                    "schema": tech_diag['schema'],
-                    "broken_links": tech_diag['broken_status']
-                }
-                requests.post(GOOGLE_SHEET_WEBHOOK_URL, json=sheet_payload, timeout=6)
-            except Exception:
-                pass
 
         st.success(f"Audit completed successfully for {user_display_name}!")
 
@@ -377,6 +524,22 @@ if submit_btn:
 
         st.info(f"🎯 **Authority Gap for '{active_keyword}':** Niche competitors average **{gap_data['benchmark_rd']}**. We estimate an immediate requirement of **{gap_data['gap_estimate']}** to challenge top rankings.")
 
+        pri_h1 = "None detected"
+        if len(h1_tags) > 0:
+            pri_h1 = h1_tags[0]
+
+        ssl_val = "Missing (Insecure)"
+        if target_url.startswith("https"):
+            ssl_val = "Active (Secure)"
+
+        title_display = "Not Specified"
+        if len(title) > 0:
+            title_display = title
+
+        desc_display = "Not Specified"
+        if len(meta_desc) > 0:
+            desc_display = meta_desc
+
         pdf_payload = {
             'client': user_display_name,
             'email': email,
@@ -387,14 +550,14 @@ if submit_btn:
             'gap_data': gap_data,
             'tech_diag': tech_diag,
             'psi': psi_data,
-            'ssl': 'Active (Secure)' if target_url.startswith('https') else 'Missing (Insecure)',
+            'ssl': ssl_val,
             'canonical': canonical_url,
-            'title': title if title else "Not Specified",
+            'title': title_display,
             'title_len': len(title),
-            'desc': meta_desc if meta_desc else "Not Specified",
+            'desc': desc_display,
             'desc_len': len(meta_desc),
             'h1_count': len(h1_tags),
-            'primary_h1': h1_tags[0] if h1_tags else "None detected",
+            'primary_h1': pri_h1,
             'total_img': len(images),
             'missing_alt': len(missing_alt),
             'int_links': len(internal_links),
