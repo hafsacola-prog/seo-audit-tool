@@ -22,6 +22,9 @@ AGENCY_PHONE = "+92 302 6264634"
 AGENCY_WEBSITE = "https://rankcentre.net"
 AGENCY_ADDRESS = "Office 402, Business Arcade, Gujrat / Lahore, Pakistan"
 
+# ✅ AAP KA GOOGLE SHEET WEBHOOK LINK YAHAN CONNECT HO GAYA HAI:
+GOOGLE_SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwetciC31Q-zSgylj7cFxnMN1IUs-B_-bSq3Zfs1Je3AHomk8Qg-IHKlWy2xeI1pyGw4g/exec"
+
 st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
 st.title("Agency Technical SEO & Authority Audit Suite")
 st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Links) and link-building gap analysis with 1-click executive PDF delivery.")
@@ -29,15 +32,13 @@ st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Li
 def generate_health_donut_chart(overall_score):
     fig, ax = plt.subplots(figsize=(2.2, 2.2), subplot_kw=dict(aspect="equal"))
     score = int(overall_score)
-    if score < 0:
-        score = 0
-    if score > 100:
-        score = 100
+    if score not in range(0, 101):
+        score = 50
     remaining = 100 - score
     
-    if score >= 80:
+    if score in range(80, 101):
         chart_color = '#10B981'
-    elif score >= 50:
+    elif score in range(50, 80):
         chart_color = '#F59E0B'
     else:
         chart_color = '#EF4444'
@@ -65,7 +66,7 @@ def generate_metrics_bar_chart(links_internal, links_external, img_total, img_mi
     values = [links_external, links_internal, img_missing, img_total]
     
     missing_color = '#10B981'
-    if img_missing > 0:
+    if img_missing != 0:
         missing_color = '#EF4444'
     bar_colors = ['#6366F1', '#3B82F6', missing_color, '#06B6D4']
     
@@ -77,7 +78,7 @@ def generate_metrics_bar_chart(links_internal, links_external, img_total, img_mi
     ax.tick_params(axis='both', which='both', labelsize=7.5, colors='#475569')
     
     max_val = 1
-    if values and max(values) > 0:
+    if values and max(values) != 0:
         max_val = max(values)
         
     for bar in bars:
@@ -121,14 +122,14 @@ def check_broken_links(internal_links, base_url, headers):
             clean_internals.append(full_l)
 
     sample = clean_internals[:10]
-    if len(sample) == 0:
+    if not sample:
         return "No internal links found to test", 0
 
     broken = 0
     for link in sample:
         try:
             res = requests.get(link, headers=headers, timeout=4, stream=True)
-            if res.status_code >= 400:
+            if res.status_code in range(400, 600):
                 broken = broken + 1
         except Exception:
             broken = broken + 1
@@ -160,10 +161,34 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
     try:
         s_res = requests.get(sitemap_url, headers=headers, timeout=5)
         if s_res.status_code == 200:
-            if " 0:
+            if "urlset" in s_res.text or "sitemapindex" in s_res.text:
+                sitemap_status = "Valid XML Sitemap (200 OK)"
+            else:
+                sitemap_status = "Accessible (200 OK)"
+    except Exception:
+        sitemap_status = "Connection Timed Out"
+
+    # Schema Markup Check
+    schemas_detected = []
+    schema_tags = soup.find_all("script", type="application/ld+json")
+    for st_tag in schema_tags:
+        try:
+            raw_text = st_tag.string
+            if raw_text:
+                payload = json.loads(raw_text)
+                if isinstance(payload, dict) and payload.get("@type"):
+                    schemas_detected.append(str(payload.get("@type")))
+                elif isinstance(payload, list):
+                    for itm in payload:
+                        if isinstance(itm, dict) and itm.get("@type"):
+                            schemas_detected.append(str(itm.get("@type")))
+        except Exception:
+            pass
+
+    if schemas_detected:
         unique_schemas = list(dict.fromkeys(schemas_detected))
         schema_status = f"Detected: {', '.join(unique_schemas[:3])}"
-    elif len(schema_tags) > 0:
+    elif schema_tags:
         schema_status = "JSON-LD Tag Present"
     else:
         schema_status = "Missing (No JSON-LD Detected)"
@@ -216,6 +241,7 @@ def build_pdf_report(data):
     sec_title = ParagraphStyle('STitle', parent=styles['Heading2'], fontSize=9.5, leading=12, fontName='Helvetica-Bold', textColor=c_dark, spaceBefore=4, spaceAfter=2)
     cell_txt = ParagraphStyle('CTxt', parent=styles['Normal'], fontSize=7, leading=9, textColor=c_dark)
     cell_bold = ParagraphStyle('CBld', parent=styles['Normal'], fontSize=7, leading=9, fontName='Helvetica-Bold', textColor=c_dark)
+    pitch_title = ParagraphStyle('PTitle', parent=styles['Normal'], fontSize=7.5, leading=10, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E3A8A'))
     pitch_txt = ParagraphStyle('PTxt', parent=styles['Normal'], fontSize=7, leading=9.5, textColor=colors.HexColor('#1E3A8A'))
 
     story = []
@@ -266,7 +292,7 @@ def build_pdf_report(data):
         h1_pen = 15
         
     img_pen = 0
-    if data['missing_alt'] > 0:
+    if data['missing_alt'] != 0:
         img_pen = 10
         
     raw_health = int(((calc_perf * 0.4) + (calc_seo * 0.6)) - h1_pen - img_pen)
@@ -326,11 +352,11 @@ def build_pdf_report(data):
     # On-Page Table
     story.append(Paragraph("2. On-Page Optimization & Core Web Vitals", sec_title))
     title_status = "Optimal"
-    if not (50 <= data['title_len'] <= 60):
+    if data['title_len'] not in range(50, 61):
         title_status = "Review Length (50-60 chars)"
         
     desc_status = "Optimal"
-    if not (140 <= data['desc_len'] <= 160):
+    if data['desc_len'] not in range(140, 161):
         desc_status = "Adjust to 140-160 chars"
         
     h1_status = "Optimal"
@@ -338,7 +364,7 @@ def build_pdf_report(data):
         h1_status = f"Warning: {data['h1_count']} H1 detected"
         
     alt_status = "Optimal"
-    if data['missing_alt'] > 0:
+    if data['missing_alt'] != 0:
         alt_status = "Optimize ALT tags"
 
     tech_data = [
@@ -346,7 +372,7 @@ def build_pdf_report(data):
         [Paragraph("Page Title", cell_txt), Paragraph(f"{data['title'][:45]}... ({data['title_len']} chars)", cell_txt), Paragraph(title_status, cell_txt)],
         [Paragraph("Meta Description", cell_txt), Paragraph(f"{data['desc'][:45]}... ({data['desc_len']} chars)", cell_txt), Paragraph(desc_status, cell_txt)],
         [Paragraph("Primary H1 Tag", cell_txt), Paragraph(data['primary_h1'][:50], cell_txt), Paragraph(h1_status, cell_txt)],
-        [Paragraph("Core Web Vitals LCP", cell_txt), Paragraph(str(data['psi']['lcp']), cell_txt), Paragraph("Target under 2.5s", cell_txt)],
+        [Paragraph("Core Web Vitals LCP", cell_txt), Paragraph(str(data['psi']['lcp']), cell_txt), Paragraph("Target: under 2.5s", cell_txt)],
         [Paragraph("Image ALT Attributes", cell_txt), Paragraph(f"{data['missing_alt']} of {data['total_img']} images missing ALT", cell_txt), Paragraph(alt_status, cell_txt)]
     ]
     tech_table = Table(tech_data, colWidths=[130, 220, 198])
@@ -385,7 +411,7 @@ def build_pdf_report(data):
         f"Contact our outreach team at {AGENCY_EMAIL} or WhatsApp {AGENCY_PHONE} for a customized link-building campaign."
     )
     pitch_card = [
-        [Paragraph(f"**{pitch_header}**", pitch_txt)],
+        [Paragraph(pitch_header, pitch_title)],
         [Paragraph(pitch_details, pitch_txt)]
     ]
     pitch_table = Table(pitch_card, colWidths=[548])
@@ -442,11 +468,11 @@ if submit_btn:
     
     name_str = f"{first_name} {last_name}".strip()
     user_display_name = "Website Owner"
-    if len(name_str) > 0:
+    if name_str:
         user_display_name = name_str
         
     active_keyword = "Core Industry Keyword"
-    if len(target_keyword.strip()) > 0:
+    if target_keyword.strip():
         active_keyword = target_keyword.strip()
 
     with st.spinner(f"Crawling {target_url} (Checking Robots, Sitemap, Schema, Broken Links)..."):
@@ -503,6 +529,22 @@ if submit_btn:
         # Backlink Gap
         gap_data = calculate_backlink_gap(competition_level)
 
+        # 🚀 AUTO-SAVE LEAD TO GOOGLE SHEET (WEBHOOK)
+        if GOOGLE_SHEET_WEBHOOK_URL and "script.google.com" in GOOGLE_SHEET_WEBHOOK_URL:
+            try:
+                sheet_payload = {
+                    "name": user_display_name,
+                    "email": email,
+                    "url": target_url,
+                    "perf_score": psi_data['perf'],
+                    "seo_score": psi_data['seo'],
+                    "h1_count": len(h1_tags),
+                    "missing_alt": len(missing_alt)
+                }
+                requests.post(GOOGLE_SHEET_WEBHOOK_URL, json=sheet_payload, timeout=6)
+            except Exception:
+                pass
+
         st.success(f"Audit completed successfully for {user_display_name}!")
 
         # Metrics Row
@@ -525,7 +567,7 @@ if submit_btn:
         st.info(f"🎯 **Authority Gap for '{active_keyword}':** Niche competitors average **{gap_data['benchmark_rd']}**. We estimate an immediate requirement of **{gap_data['gap_estimate']}** to challenge top rankings.")
 
         pri_h1 = "None detected"
-        if len(h1_tags) > 0:
+        if h1_tags:
             pri_h1 = h1_tags[0]
 
         ssl_val = "Missing (Insecure)"
@@ -533,11 +575,11 @@ if submit_btn:
             ssl_val = "Active (Secure)"
 
         title_display = "Not Specified"
-        if len(title) > 0:
+        if title:
             title_display = title
 
         desc_display = "Not Specified"
-        if len(meta_desc) > 0:
+        if meta_desc:
             desc_display = meta_desc
 
         pdf_payload = {
