@@ -30,12 +30,34 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
 st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
 st.title("Agency Technical SEO & Authority Audit Suite")
-st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Links, Google SERP Snippet) and authority gap analysis with 1-click executive PDF delivery.")
+st.write("Perform deep technical diagnostics, Google SERP simulation, and side-by-side competitor benchmark gap analysis with 1-click executive PDF delivery.")
 
 
-def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag, gap_data, keyword):
+def extract_clean_word_count(html_content):
+    """HTML tags remove karke actual visible word count calculate karna"""
+    try:
+        temp_soup = BeautifulSoup(html_content, "html.parser")
+        for bad_elem in temp_soup(["script", "style", "noscript", "svg", "head"]):
+            bad_elem.extract()
+        text = temp_soup.get_text(separator=' ', strip=True)
+        return len(text.split())
+    except Exception:
+        return 0
+
+
+def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag, gap_data, keyword, comp_data=None):
     if not GEMINI_API_KEY:
         return "Gemini API key not configured in Streamlit Secrets."
+
+    comp_context = "No direct competitor comparison requested."
+    if comp_data:
+        comp_context = f"""
+        Direct Competitor Comparison:
+        - Competitor URL: {comp_data['url']}
+        - Client Speed: {psi.get('perf', 'N/A')}/100 vs Competitor Speed: {comp_data.get('speed', 'N/A')}/100
+        - Client Word Count: {gap_data.get('client_words', 0)} vs Competitor Word Count: {comp_data.get('words', 0)}
+        - Competitor H1: {comp_data.get('h1', 'N/A')}
+        """
 
     prompt = f"""
     You are an expert SEO strategist. Analyze these live audit findings for client website {url}:
@@ -49,10 +71,11 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
     - Schema Markup: {tech_diag.get('schema', 'N/A')}
     - Broken Links Tested: {tech_diag.get('broken_status', 'N/A')}
     - Estimated Backlink Gap: {gap_data.get('gap_estimate', 'N/A')}
+    {comp_context}
 
     Write a private agency outreach brief containing:
-    1. 2 quick-win technical fixes the client needs right now.
-    2. A short personalized cold email pitch angle Saad can send to this client to sell them high-authority backlinks and SEO services.
+    1. 2 high-impact technical or content fixes to beat the competitor.
+    2. A short personalized cold email pitch Saad can send to this client to sell high-authority backlinks and SEO retainers.
     Keep it strictly professional, concise, and actionable (maximum 150 words).
     """
 
@@ -72,8 +95,6 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
             flash_models = [m for m in active_supported if "flash" in m]
             if flash_models:
                 candidate_models = flash_models + candidate_models
-            elif active_supported:
-                candidate_models = active_supported + candidate_models
     except Exception:
         pass
 
@@ -275,26 +296,29 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
     }
 
 
-def calculate_backlink_gap(competition_tier):
+def calculate_backlink_gap(competition_tier, client_words=0, comp_words=0):
+    word_diff = max(0, comp_words - client_words)
     if "Low" in competition_tier:
-        return {
-            "tier": "Low Competition / Local Niche",
-            "benchmark_rd": "15 - 35 Referring Domains",
-            "gap_estimate": "10 - 25 High-Quality Backlinks",
-            "strategy": "Local citations, foundational niche backlinks, and 2-3 guest posts per month."
-        }
-    if "High" in competition_tier:
-        return {
-            "tier": "High Competition / Global Niche",
-            "benchmark_rd": "120 - 300+ Referring Domains",
-            "gap_estimate": "60 - 150+ High-Authority Backlinks (DR 50+)",
-            "strategy": "Aggressive guest outreach, digital PR, resource-page link building, and tiered contextual links."
-        }
+        gap_est = "10 - 25 High-Quality Backlinks"
+        strat = "Local citations, niche business directories, and 2-3 contextual guest posts per month."
+        rd_bench = "15 - 35 Referring Domains"
+    elif "High" in competition_tier:
+        gap_est = "60 - 150+ High-Authority Backlinks (DR 50+)"
+        strat = "Digital PR link acquisition, high-tier editorial placements (DR 60+), and competitor backlink replication."
+        rd_bench = "120 - 300+ Referring Domains"
+    else:
+        gap_est = "30 - 50 Contextual Editorial Links"
+        strat = "Niche-targeted guest blogging on DR 40-70 platforms with targeted contextual anchor distribution."
+        rd_bench = "45 - 90 Referring Domains"
+
     return {
-        "tier": "Medium Competition / Standard Commercial Niche",
-        "benchmark_rd": "45 - 90 Referring Domains",
-        "gap_estimate": "30 - 50 Contextual Editorial Links",
-        "strategy": "Niche-relevant guest blogging on DR 40-70 sites with contextual anchors."
+        "tier": competition_tier,
+        "benchmark_rd": rd_bench,
+        "gap_estimate": gap_est,
+        "strategy": strat,
+        "word_diff": word_diff,
+        "client_words": client_words,
+        "comp_words": comp_words
     }
 
 
@@ -340,10 +364,11 @@ def build_pdf_report(data):
     story.append(Spacer(1, 5))
 
     # 2. Meta Table
+    comp_url_str = data['comp_data']['url'] if data.get('comp_data') else "None (Single Site Audit)"
     meta_info = [
         [Paragraph("Target URL:", cell_bold), Paragraph(data['url'], cell_txt), Paragraph("Client Contact:", cell_bold), Paragraph(data['client'], cell_txt)],
         [Paragraph("Root Domain:", cell_bold), Paragraph(data['domain'], cell_txt), Paragraph("Client Email:", cell_bold), Paragraph(data['email'], cell_txt)],
-        [Paragraph("Target Keyword:", cell_bold), Paragraph(data['keyword'], cell_txt), Paragraph("Niche Competition:", cell_bold), Paragraph(data['comp_tier'], cell_txt)]
+        [Paragraph("Target Keyword:", cell_bold), Paragraph(data['keyword'], cell_txt), Paragraph("Competitor URL:", cell_bold), Paragraph(comp_url_str[:35], cell_txt)]
     ]
     meta_table = Table(meta_info, colWidths=[75, 200, 75, 198])
     meta_table.setStyle(TableStyle([
@@ -402,7 +427,37 @@ def build_pdf_report(data):
     story.append(diag_table)
     story.append(Spacer(1, 5))
 
-    # 4. Google SERP Snippet Preview in PDF
+    # 4. Side-by-Side Competitor Comparison Table (Agar competitor mojood ho)
+    if data.get('comp_data'):
+        comp = data['comp_data']
+        story.append(Paragraph("Direct Side-by-Side Competitor Benchmark", sec_title))
+        
+        speed_gap = "Balanced"
+        if isinstance(data['psi']['perf'], int) and isinstance(comp['speed'], int):
+            diff = data['psi']['perf'] - comp['speed']
+            speed_gap = f"{'+' if diff > 0 else ''}{diff} Points"
+
+        content_gap = f"{data['gap_data']['word_diff']} Words Deficit" if data['gap_data']['word_diff'] > 0 else "Content Lead"
+
+        comp_table_rows = [
+            [Paragraph("Benchmark Metric", cell_bold), Paragraph(f"Client ({data['domain']})", cell_bold), Paragraph(f"Competitor ({comp['domain']})", cell_bold), Paragraph("Competitive Gap / Advantage", cell_bold)],
+            [Paragraph("Mobile PageSpeed", cell_txt), Paragraph(f"{data['psi']['perf']}/100", cell_txt), Paragraph(f"{comp['speed']}/100", cell_txt), Paragraph(speed_gap, cell_bold)],
+            [Paragraph("Content Depth (Word Count)", cell_txt), Paragraph(f"{data['client_words']:,} words", cell_txt), Paragraph(f"{comp['words']:,} words", cell_txt), Paragraph(content_gap, cell_bold)],
+            [Paragraph("Primary H1 Architecture", cell_txt), Paragraph(f"{data['h1_count']} H1 detected", cell_txt), Paragraph(f"{comp['h1_count']} H1 detected", cell_txt), Paragraph("Keyword Heading Structure", cell_txt)],
+            [Paragraph("External Reference Links", cell_txt), Paragraph(f"{data['ext_links']} links", cell_txt), Paragraph(f"{comp['ext_links']} links", cell_txt), Paragraph("Outbound Authority Trust", cell_txt)],
+            [Paragraph("Authority Gap to Overtake", cell_txt), Paragraph(data['gap_data']['benchmark_rd'], cell_txt), Paragraph("Market Leader Profile", cell_txt), Paragraph(f"Need {data['gap_data']['gap_estimate']}", cell_bold)]
+        ]
+        comp_table = Table(comp_table_rows, colWidths=[140, 130, 130, 148])
+        comp_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EEF2F6')),
+            ('PADDING', (0, 0), (-1, -1), 2.5),
+            ('GRID', (0, 0), (-1, -1), 0.5, c_border),
+            ('BACKGROUND', (3, 1), (3, -1), colors.HexColor('#F8FAFC')),
+        ]))
+        story.append(comp_table)
+        story.append(Spacer(1, 5))
+
+    # 5. Google SERP Snippet Preview
     story.append(Paragraph("Live Google SERP Display Simulation", sec_title))
     serp_sim_title = data['title'] if len(data['title']) <= 60 else data['title'][:57] + "..."
     serp_sim_desc = data['desc'] if len(data['desc']) <= 155 else data['desc'][:152] + "..."
@@ -426,7 +481,7 @@ def build_pdf_report(data):
     story.append(serp_table)
     story.append(Spacer(1, 5))
 
-    # 5. Deep Technical Table
+    # 6. Deep Technical Table
     story.append(Paragraph("1. Deep Technical Crawlability & Architecture", sec_title))
     tech_diag = data['tech_diag']
     d_data = [
@@ -445,55 +500,12 @@ def build_pdf_report(data):
     story.append(d_table)
     story.append(Spacer(1, 5))
 
-    # 6. On-Page Table
-    story.append(Paragraph("2. On-Page Optimization & Core Web Vitals", sec_title))
-    title_status = "Optimal" if data['title_len'] in range(50, 61) else "Review Length (50-60 chars)"
-    desc_status = "Optimal" if data['desc_len'] in range(140, 161) else "Adjust to 140-160 chars"
-    h1_status = "Optimal" if data['h1_count'] == 1 else f"Warning: {data['h1_count']} H1 detected"
-    alt_status = "Optimal" if data['missing_alt'] == 0 else "Optimize ALT tags"
-
-    tech_data = [
-        [Paragraph("Audit Check", cell_bold), Paragraph("Observed Value", cell_bold), Paragraph("Optimization Status", cell_bold)],
-        [Paragraph("Page Title", cell_txt), Paragraph(f"{data['title'][:45]}... ({data['title_len']} chars)", cell_txt), Paragraph(title_status, cell_txt)],
-        [Paragraph("Meta Description", cell_txt), Paragraph(f"{data['desc'][:45]}... ({data['desc_len']} chars)", cell_txt), Paragraph(desc_status, cell_txt)],
-        [Paragraph("Primary H1 Tag", cell_txt), Paragraph(data['primary_h1'][:50], cell_txt), Paragraph(h1_status, cell_txt)],
-        [Paragraph("Core Web Vitals LCP", cell_txt), Paragraph(str(data['psi']['lcp']), cell_txt), Paragraph("Target: under 2.5s", cell_txt)],
-        [Paragraph("Image ALT Attributes", cell_txt), Paragraph(f"{data['missing_alt']} of {data['total_img']} images missing ALT", cell_txt), Paragraph(alt_status, cell_txt)]
-    ]
-    tech_table = Table(tech_data, colWidths=[130, 220, 198])
-    tech_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EEF2F6')),
-        ('PADDING', (0, 0), (-1, -1), 2.5),
-        ('GRID', (0, 0), (-1, -1), 0.5, c_border),
-    ]))
-    story.append(tech_table)
-    story.append(Spacer(1, 5))
-
-    # 7. Gap Table
-    story.append(Paragraph("3. Off-Page Authority & Link-Building Gap", sec_title))
-    gap = data['gap_data']
-    gap_table_data = [
-        [Paragraph("Authority Parameter", cell_bold), Paragraph("Audit Finding & Benchmark", cell_bold)],
-        [Paragraph("Target Keyword Target", cell_txt), Paragraph(f"{data['keyword']} (Competitiveness: {gap['tier']})", cell_txt)],
-        [Paragraph("Page 1 RD Benchmark", cell_txt), Paragraph(f"Top ranking competitors average {gap['benchmark_rd']}", cell_txt)],
-        [Paragraph("Estimated Backlink Gap", cell_txt), Paragraph(f"Estimated requirement: {gap['gap_estimate']} to challenge Page 1", cell_txt)],
-        [Paragraph("Outreach Action Strategy", cell_txt), Paragraph(gap['strategy'], cell_txt)]
-    ]
-    gap_table = Table(gap_table_data, colWidths=[150, 398])
-    gap_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EEF2F6')),
-        ('PADDING', (0, 0), (-1, -1), 2.5),
-        ('GRID', (0, 0), (-1, -1), 0.5, c_border),
-    ]))
-    story.append(gap_table)
-    story.append(Spacer(1, 5))
-
-    # 8. Pitch Box
-    pitch_header = f"Ready to Close Your Authority Gap? {AGENCY_NAME} Outreach Solution"
+    # 7. Pitch Box
+    pitch_header = f"Ready to Beat Your Competitor? {AGENCY_NAME} Authority Outreach"
     pitch_details = (
-        f"Technical fixes establish crawling readiness, but authoritative backlinks drive top positions. "
-        f"We execute tailored outreach campaigns, securing contextual dofollow guest posts on genuine traffic-verified domains (DR 40 to 80+). "
-        f"Contact our outreach team at {AGENCY_EMAIL} or WhatsApp {AGENCY_PHONE} for a customized link-building campaign."
+        f"Fixing technical gaps makes your site crawl-ready, but overtaking competitors requires higher authority. "
+        f"We secure targeted, high-traffic editorial backlinks (DR 40 to 80+) that close the referring domain gap and drive page 1 rankings. "
+        f"Contact our team at {AGENCY_EMAIL} or WhatsApp {AGENCY_PHONE} for your tailored campaign."
     )
     pitch_card = [
         [Paragraph(pitch_header, pitch_title)],
@@ -526,18 +538,24 @@ with st.form("audit_form"):
     with col3:
         email = st.text_input("Business Email *", placeholder="name@company.com")
     with col4:
-        website_url = st.text_input("Website URL *", placeholder="https://example.com")
+        website_url = st.text_input("Client Website URL *", placeholder="https://example.com")
 
     col5, col6 = st.columns(2)
     with col5:
-        target_keyword = st.text_input("Primary Target Keyword (Optional)", placeholder="e.g. SEO Agency Lahore / Best CRM Software")
+        target_keyword = st.text_input("Primary Target Keyword (Optional)", placeholder="e.g. SEO Agency Lahore")
     with col6:
         competition_level = st.selectbox(
             "Niche Competition Level",
             ["Medium Competition (Standard Commercial Niche)", "Low Competition (Local / Micro-Niche)", "High Competition (Global / Finance / SaaS)"]
         )
 
-    submit_btn = st.form_submit_button("Generate Complete Technical & Authority Audit")
+    # ⚡ Side-by-Side Competitor Toggle
+    compare_mode = st.checkbox("⚡ Compare with Competitor (Side-by-Side Benchmark)", value=False)
+    competitor_input_url = ""
+    if compare_mode:
+        competitor_input_url = st.text_input("Competitor Website URL *", placeholder="https://competitor.com")
+
+    submit_btn = st.form_submit_button("Generate Complete Technical & Competitor Audit 🚀")
 
 if submit_btn:
     if not email.strip() or "@" not in email or "." not in email:
@@ -548,21 +566,32 @@ if submit_btn:
         st.error("Please enter a valid Website URL.")
         st.stop()
 
+    if compare_mode and not competitor_input_url.strip():
+        st.error("Please enter a valid Competitor Website URL for comparison.")
+        st.stop()
+
     target_url = website_url.strip()
     if not target_url.startswith("http"):
         target_url = "https://" + target_url
+
+    comp_url = competitor_input_url.strip()
+    if comp_url and not comp_url.startswith("http"):
+        comp_url = "https://" + comp_url
 
     name_str = f"{first_name} {last_name}".strip()
     user_display_name = name_str if name_str else "Website Owner"
     active_keyword = target_keyword.strip() if target_keyword.strip() else "Core Industry Keyword"
 
-    with st.spinner(f"Crawling {target_url} & Generating SERP Preview..."):
+    with st.spinner(f"Crawling sites & analyzing competitive benchmarks..."):
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        
+        # 1. Crawl Client Website
         try:
-            response = requests.get(target_url, headers=headers, timeout=15)
-            soup = BeautifulSoup(response.text, "html.parser")
+            client_resp = requests.get(target_url, headers=headers, timeout=15)
+            soup = BeautifulSoup(client_resp.text, "html.parser")
+            client_word_count = extract_clean_word_count(client_resp.text)
         except Exception as e:
-            st.error(f"Target website error: {e}")
+            st.error(f"Client website connection error: {e}")
             st.stop()
 
         title = soup.title.string.strip() if soup.title and soup.title.string else ""
@@ -590,31 +619,60 @@ if submit_btn:
             else:
                 external_links.append(href)
 
-        # Deep Technical Diagnostics
+        # Deep Technical & PageSpeed for Client
         tech_diag = audit_deep_technical(target_url, soup, internal_links, headers)
-
-        # Google PageSpeed
         psi_data = get_google_pagespeed(target_url)
 
-        # Backlink Gap
-        gap_data = calculate_backlink_gap(competition_level)
+        # 2. Crawl Competitor (Agar toggle active ho)
+        comp_data = None
+        if compare_mode and comp_url:
+            try:
+                comp_resp = requests.get(comp_url, headers=headers, timeout=15)
+                comp_soup = BeautifulSoup(comp_resp.text, "html.parser")
+                comp_words = extract_clean_word_count(comp_resp.text)
+                comp_h1s = [h.get_text(strip=True) for h in comp_soup.find_all("h1")]
+                comp_domain = tldextract.extract(comp_url).registered_domain
+                comp_psi = get_google_pagespeed(comp_url)
+                
+                comp_ext = [
+                    a["href"] for a in comp_soup.find_all("a", href=True)
+                    if tldextract.extract(a["href"]).registered_domain not in [comp_domain, "", None]
+                ]
 
-        # GEMINI AI STRATEGY
+                comp_data = {
+                    "url": comp_url,
+                    "domain": comp_domain,
+                    "speed": comp_psi.get("perf", "N/A"),
+                    "words": comp_words,
+                    "h1": comp_h1s[0] if comp_h1s else "None detected",
+                    "h1_count": len(comp_h1s),
+                    "ext_links": len(comp_ext)
+                }
+            except Exception as comp_err:
+                st.warning(f"Competitor crawl skipped due to connection limit: {comp_err}")
+
+        # Gap calculation
+        client_words = client_word_count
+        comp_words_val = comp_data['words'] if comp_data else 0
+        gap_data = calculate_backlink_gap(competition_level, client_words=client_words, comp_words=comp_words_val)
+
+        # Gemini AI Pitch
         gemini_strategy = get_gemini_private_strategy(
-            target_url, title, meta_desc, len(h1_tags), psi_data, tech_diag, gap_data, active_keyword
+            target_url, title, meta_desc, len(h1_tags), psi_data, tech_diag, gap_data, active_keyword, comp_data=comp_data
         )
 
-        # AUTO-SAVE LEAD TO GOOGLE SHEET
+        # Sheet Webhook
         if GOOGLE_SHEET_WEBHOOK_URL and "script.google.com" in GOOGLE_SHEET_WEBHOOK_URL:
             try:
                 sheet_payload = {
                     "name": user_display_name,
                     "email": email,
                     "url": target_url,
+                    "competitor_url": comp_url if comp_data else "N/A",
                     "perf_score": psi_data['perf'],
-                    "seo_score": psi_data['seo'],
-                    "h1_count": len(h1_tags),
-                    "missing_alt": len(missing_alt),
+                    "comp_speed": comp_data['speed'] if comp_data else "N/A",
+                    "client_words": client_words,
+                    "comp_words": comp_words_val,
                     "ai_strategy": gemini_strategy
                 }
                 requests.post(GOOGLE_SHEET_WEBHOOK_URL, json=sheet_payload, timeout=6)
@@ -625,16 +683,43 @@ if submit_btn:
 
         # Metrics Row
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Performance", f"{psi_data['perf']}/100")
-        c2.metric("Lighthouse SEO", f"{psi_data['seo']}/100")
+        c1.metric("Client Speed", f"{psi_data['perf']}/100")
+        c2.metric("Client Word Count", f"{client_words:,} words")
         c3.metric("Broken Links Status", str(tech_diag['broken_count']) + " Broken")
         c4.metric("Backlink Gap Est.", gap_data['gap_estimate'].split()[0])
 
         # ==========================================================
-        # 🌐 DYNAMIC GOOGLE SERP SNIPPET PREVIEW (UI)
+        # ⚔️ SIDE-BY-SIDE COMPETITOR COMPARISON (UI)
         # ==========================================================
+        if comp_data:
+            st.markdown("### ⚔️ Side-by-Side Competitor Benchmark")
+            cmp_col1, cmp_col2 = st.columns(2)
+            
+            with cmp_col1:
+                with st.container(border=True):
+                    st.markdown(f"#### 🌐 Your Site: `{base_domain}`")
+                    st.write(f"• **Mobile Speed:** {psi_data['perf']}/100")
+                    st.write(f"• **Word Count:** {client_words:,} words")
+                    st.write(f"• **H1 Headings:** {len(h1_tags)} detected")
+                    st.write(f"• **Outbound References:** {len(external_links)} links")
+                    st.write(f"• **Missing Image ALT:** {len(missing_alt)} tags")
+
+            with cmp_col2:
+                with st.container(border=True):
+                    st.markdown(f"#### 🎯 Competitor: `{comp_data['domain']}`")
+                    st.write(f"• **Mobile Speed:** {comp_data['speed']}/100")
+                    st.write(f"• **Word Count:** {comp_data['words']:,} words")
+                    st.write(f"• **H1 Headings:** {comp_data['h1_count']} detected")
+                    st.write(f"• **Outbound References:** {comp_data['ext_links']} links")
+                    st.write(f"• **Primary Heading:** {comp_data['h1'][:40]}...")
+
+            if gap_data['word_diff'] > 0:
+                st.warning(f"⚠️ **Content Depth Gap:** Competitor has **{gap_data['word_diff']:,} more words** on their target page. Expand your topical coverage.")
+            else:
+                st.success("✅ **Content Depth:** Your page has equal or higher word count than your direct competitor.")
+
+        # Google SERP Snippet Preview
         st.markdown("### 🔎 Live Google SERP Snippet Simulation")
-        
         display_title = title if title else "Untitled Page"
         is_title_truncated = len(display_title) > 60
         serp_preview_title = (display_title[:57] + "...") if is_title_truncated else display_title
@@ -648,21 +733,7 @@ if submit_btn:
             st.markdown(f"#### :blue[{serp_preview_title}]")
             st.write(serp_preview_desc)
 
-        badge_col1, badge_col2 = st.columns(2)
-        with badge_col1:
-            if is_title_truncated:
-                st.warning(f"⚠️ **Title Cut-off Alert:** Title is {len(title)} characters. Google cuts titles past 60 characters. Truncation simulated above.")
-            else:
-                st.success(f"✅ **Title Length:** {len(title)}/60 characters (Fully visible in Google SERP).")
-        with badge_col2:
-            if not meta_desc:
-                st.error("❌ **Missing Meta Description:** Google will choose random text from your page.")
-            elif is_desc_truncated:
-                st.info(f"ℹ️ **Description Length:** {len(meta_desc)} characters (Slightly long, desktop displays ~155-160 chars).")
-            else:
-                st.success(f"✅ **Description Length:** {len(meta_desc)}/160 characters (Optimal visibility).")
-
-        # Technical Output Box
+        # Technical Diagnostics
         st.markdown("### 🛠️ Deep Technical Diagnostics")
         t_col1, t_col2 = st.columns(2)
         with t_col1:
@@ -672,7 +743,7 @@ if submit_btn:
             st.write(f"• **Schema Markup:** {tech_diag['schema']}")
             st.write(f"• **Internal Link Integrity:** {tech_diag['broken_status']}")
 
-        st.info(f"🎯 **Authority Gap for '{active_keyword}':** Niche competitors average **{gap_data['benchmark_rd']}**. We estimate an immediate requirement of **{gap_data['gap_estimate']}** to challenge top rankings.")
+        st.info(f"🎯 **Authority Gap for '{active_keyword}':** Top ranking competitors average **{gap_data['benchmark_rd']}**. We estimate an immediate requirement of **{gap_data['gap_estimate']}** to challenge top rankings.")
 
         pri_h1 = h1_tags[0] if h1_tags else "None detected"
         ssl_val = "Active (Secure)" if target_url.startswith("https") else "Missing (Insecure)"
@@ -685,6 +756,8 @@ if submit_btn:
             'keyword': active_keyword,
             'comp_tier': competition_level,
             'gap_data': gap_data,
+            'comp_data': comp_data,
+            'client_words': client_words,
             'tech_diag': tech_diag,
             'psi': psi_data,
             'ssl': ssl_val,
