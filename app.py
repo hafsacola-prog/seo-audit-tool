@@ -25,12 +25,12 @@ AGENCY_ADDRESS = "Office 402, Business Arcade, Gujrat / Lahore, Pakistan"
 # Google Sheet Apps Script Webhook URL
 GOOGLE_SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwetciC31Q-zSgylj7cFxnMN1IUs-B_-bSq3Zfs1Je3AHomk8Qg-IHKlWy2xeI1pyGw4g/exec"
 
-# Streamlit Secrets se API key lega taake GitHub block na kare
+# Streamlit Secrets se API key fetch karna
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
 st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
 st.title("Agency Technical SEO & Authority Audit Suite")
-st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Links) and link-building gap analysis with 1-click executive PDF delivery.")
+st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Links, Google SERP Snippet) and authority gap analysis with 1-click executive PDF delivery.")
 
 
 def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag, gap_data, keyword):
@@ -59,7 +59,6 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
     headers = {"Content-Type": "application/json"}
     body = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    # Auto-detection list to prevent 404 errors
     candidate_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"]
     try:
         list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
@@ -73,6 +72,8 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
             flash_models = [m for m in active_supported if "flash" in m]
             if flash_models:
                 candidate_models = flash_models + candidate_models
+            elif active_supported:
+                candidate_models = active_supported + candidate_models
     except Exception:
         pass
 
@@ -316,9 +317,13 @@ def build_pdf_report(data):
     pitch_title = ParagraphStyle('PTitle', parent=styles['Normal'], fontSize=7.5, leading=10, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E3A8A'))
     pitch_txt = ParagraphStyle('PTxt', parent=styles['Normal'], fontSize=7, leading=9.5, textColor=colors.HexColor('#1E3A8A'))
 
+    serp_url_style = ParagraphStyle('SerpUrl', parent=styles['Normal'], fontSize=7, leading=9, textColor=colors.HexColor('#202124'))
+    serp_title_style = ParagraphStyle('SerpTitle', parent=styles['Normal'], fontSize=9.5, leading=12, fontName='Helvetica-Bold', textColor=colors.HexColor('#1A0DAB'))
+    serp_desc_style = ParagraphStyle('SerpDesc', parent=styles['Normal'], fontSize=7.5, leading=10, textColor=colors.HexColor('#4D5156'))
+
     story = []
 
-    # Header Table
+    # 1. Header Table
     header_table_data = [
         [Paragraph(AGENCY_NAME, title_agency), Paragraph("Email:", cell_bold), Paragraph(AGENCY_EMAIL, agency_sub)],
         [Paragraph("Search Engine Optimization & Outreach Consultancy", agency_sub), Paragraph("Phone:", cell_bold), Paragraph(AGENCY_PHONE, agency_sub)],
@@ -334,7 +339,7 @@ def build_pdf_report(data):
     story.append(hdr_table)
     story.append(Spacer(1, 5))
 
-    # Meta Table
+    # 2. Meta Table
     meta_info = [
         [Paragraph("Target URL:", cell_bold), Paragraph(data['url'], cell_txt), Paragraph("Client Contact:", cell_bold), Paragraph(data['client'], cell_txt)],
         [Paragraph("Root Domain:", cell_bold), Paragraph(data['domain'], cell_txt), Paragraph("Client Email:", cell_bold), Paragraph(data['email'], cell_txt)],
@@ -350,7 +355,7 @@ def build_pdf_report(data):
     story.append(meta_table)
     story.append(Spacer(1, 5))
 
-    # Diagnostics Calculation
+    # 3. Diagnostics Calculation
     calc_perf = 65
     if isinstance(data['psi']['perf'], int):
         calc_perf = data['psi']['perf']
@@ -397,7 +402,31 @@ def build_pdf_report(data):
     story.append(diag_table)
     story.append(Spacer(1, 5))
 
-    # Deep Technical Table
+    # 4. Google SERP Snippet Preview in PDF
+    story.append(Paragraph("Live Google SERP Display Simulation", sec_title))
+    serp_sim_title = data['title'] if len(data['title']) <= 60 else data['title'][:57] + "..."
+    serp_sim_desc = data['desc'] if len(data['desc']) <= 155 else data['desc'][:152] + "..."
+    if not serp_sim_desc or serp_sim_desc == "Not Specified":
+        serp_sim_desc = "No meta description defined. Google will dynamically extract snippet sentences from body content."
+
+    clean_url_snippet = data['url'].replace('https://','').replace('http://','')[:45]
+    serp_box_data = [
+        [Paragraph(f"**{data['domain']}** › {clean_url_snippet}", serp_url_style)],
+        [Paragraph(serp_sim_title, serp_title_style)],
+        [Paragraph(serp_sim_desc, serp_desc_style)],
+        [Paragraph(f"*Title Length: {data['title_len']}/60 chars ({'Google Cut-off Alert' if data['title_len'] > 60 else 'Optimal'}) | Description Length: {data['desc_len']}/160 chars*", cell_txt)]
+    ]
+    serp_table = Table(serp_box_data, colWidths=[548])
+    serp_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#FFFFFF')),
+        ('PADDING', (0, 0), (-1, -1), 3),
+        ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor('#CBD5E1')),
+        ('BACKGROUND', (0, 3), (-1, 3), colors.HexColor('#F8FAFC')),
+    ]))
+    story.append(serp_table)
+    story.append(Spacer(1, 5))
+
+    # 5. Deep Technical Table
     story.append(Paragraph("1. Deep Technical Crawlability & Architecture", sec_title))
     tech_diag = data['tech_diag']
     d_data = [
@@ -416,7 +445,7 @@ def build_pdf_report(data):
     story.append(d_table)
     story.append(Spacer(1, 5))
 
-    # On-Page Table
+    # 6. On-Page Table
     story.append(Paragraph("2. On-Page Optimization & Core Web Vitals", sec_title))
     title_status = "Optimal" if data['title_len'] in range(50, 61) else "Review Length (50-60 chars)"
     desc_status = "Optimal" if data['desc_len'] in range(140, 161) else "Adjust to 140-160 chars"
@@ -440,7 +469,7 @@ def build_pdf_report(data):
     story.append(tech_table)
     story.append(Spacer(1, 5))
 
-    # Gap Table
+    # 7. Gap Table
     story.append(Paragraph("3. Off-Page Authority & Link-Building Gap", sec_title))
     gap = data['gap_data']
     gap_table_data = [
@@ -459,7 +488,7 @@ def build_pdf_report(data):
     story.append(gap_table)
     story.append(Spacer(1, 5))
 
-    # Pitch Box
+    # 8. Pitch Box
     pitch_header = f"Ready to Close Your Authority Gap? {AGENCY_NAME} Outreach Solution"
     pitch_details = (
         f"Technical fixes establish crawling readiness, but authoritative backlinks drive top positions. "
@@ -527,7 +556,7 @@ if submit_btn:
     user_display_name = name_str if name_str else "Website Owner"
     active_keyword = target_keyword.strip() if target_keyword.strip() else "Core Industry Keyword"
 
-    with st.spinner(f"Crawling {target_url} & Generating Gemini Strategic Brief..."):
+    with st.spinner(f"Crawling {target_url} & Generating SERP Preview..."):
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         try:
             response = requests.get(target_url, headers=headers, timeout=15)
@@ -570,12 +599,12 @@ if submit_btn:
         # Backlink Gap
         gap_data = calculate_backlink_gap(competition_level)
 
-        # GEMINI AI STRATEGY GENERATION
+        # GEMINI AI STRATEGY
         gemini_strategy = get_gemini_private_strategy(
             target_url, title, meta_desc, len(h1_tags), psi_data, tech_diag, gap_data, active_keyword
         )
 
-        # AUTO-SAVE LEAD & AI SUGGESTIONS TO GOOGLE SHEET
+        # AUTO-SAVE LEAD TO GOOGLE SHEET
         if GOOGLE_SHEET_WEBHOOK_URL and "script.google.com" in GOOGLE_SHEET_WEBHOOK_URL:
             try:
                 sheet_payload = {
@@ -601,6 +630,38 @@ if submit_btn:
         c3.metric("Broken Links Status", str(tech_diag['broken_count']) + " Broken")
         c4.metric("Backlink Gap Est.", gap_data['gap_estimate'].split()[0])
 
+        # ==========================================================
+        # 🌐 DYNAMIC GOOGLE SERP SNIPPET PREVIEW (UI)
+        # ==========================================================
+        st.markdown("### 🔎 Live Google SERP Snippet Simulation")
+        
+        display_title = title if title else "Untitled Page"
+        is_title_truncated = len(display_title) > 60
+        serp_preview_title = (display_title[:57] + "...") if is_title_truncated else display_title
+        
+        display_desc = meta_desc if meta_desc else "No meta description specified. Search engine algorithms will automatically pull content snippets from the page."
+        is_desc_truncated = len(display_desc) > 155
+        serp_preview_desc = (display_desc[:152] + "...") if is_desc_truncated else display_desc
+
+        with st.container(border=True):
+            st.caption(f"🌐 **{base_domain}** › {target_url[:65]}")
+            st.markdown(f"#### :blue[{serp_preview_title}]")
+            st.write(serp_preview_desc)
+
+        badge_col1, badge_col2 = st.columns(2)
+        with badge_col1:
+            if is_title_truncated:
+                st.warning(f"⚠️ **Title Cut-off Alert:** Title is {len(title)} characters. Google cuts titles past 60 characters. Truncation simulated above.")
+            else:
+                st.success(f"✅ **Title Length:** {len(title)}/60 characters (Fully visible in Google SERP).")
+        with badge_col2:
+            if not meta_desc:
+                st.error("❌ **Missing Meta Description:** Google will choose random text from your page.")
+            elif is_desc_truncated:
+                st.info(f"ℹ️ **Description Length:** {len(meta_desc)} characters (Slightly long, desktop displays ~155-160 chars).")
+            else:
+                st.success(f"✅ **Description Length:** {len(meta_desc)}/160 characters (Optimal visibility).")
+
         # Technical Output Box
         st.markdown("### 🛠️ Deep Technical Diagnostics")
         t_col1, t_col2 = st.columns(2)
@@ -613,6 +674,9 @@ if submit_btn:
 
         st.info(f"🎯 **Authority Gap for '{active_keyword}':** Niche competitors average **{gap_data['benchmark_rd']}**. We estimate an immediate requirement of **{gap_data['gap_estimate']}** to challenge top rankings.")
 
+        pri_h1 = h1_tags[0] if h1_tags else "None detected"
+        ssl_val = "Active (Secure)" if target_url.startswith("https") else "Missing (Insecure)"
+
         pdf_payload = {
             'client': user_display_name,
             'email': email,
@@ -623,14 +687,14 @@ if submit_btn:
             'gap_data': gap_data,
             'tech_diag': tech_diag,
             'psi': psi_data,
-            'ssl': 'Active (Secure)' if target_url.startswith("https") else 'Missing (Insecure)',
+            'ssl': ssl_val,
             'canonical': canonical_url,
             'title': title if title else "Not Specified",
             'title_len': len(title),
             'desc': meta_desc if meta_desc else "Not Specified",
             'desc_len': len(meta_desc),
             'h1_count': len(h1_tags),
-            'primary_h1': h1_tags[0] if h1_tags else "None detected",
+            'primary_h1': pri_h1,
             'total_img': len(images),
             'missing_alt': len(missing_alt),
             'int_links': len(internal_links),
