@@ -26,7 +26,8 @@ AGENCY_ADDRESS = "Office 402, Business Arcade, Gujrat / Lahore, Pakistan"
 GOOGLE_SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwetciC31Q-zSgylj7cFxnMN1IUs-B_-bSq3Zfs1Je3AHomk8Qg-IHKlWy2xeI1pyGw4g/exec"
 
 # 🔑 GOOGLE AI STUDIO GEMINI API KEY (Yahan apni key paste karein):
-GEMINI_API_KEY = "AQ.Ab8RN6KNpYimUL_YG8zz1BUoLMYGy3zXtNQ5uodnI3jV6HRVrA"
+# Streamlit ke secure vault se key fetch karega:
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
 st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
 st.title("Agency Technical SEO & Authority Audit Suite")
