@@ -25,12 +25,16 @@ AGENCY_ADDRESS = "Office 402, Business Arcade, Gujrat / Lahore, Pakistan"
 # Google Sheet Apps Script Webhook URL
 GOOGLE_SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwetciC31Q-zSgylj7cFxnMN1IUs-B_-bSq3Zfs1Je3AHomk8Qg-IHKlWy2xeI1pyGw4g/exec"
 
-# Streamlit Secrets se API key fetch karna
+# Moz API Free Credentials (Streamlit Secrets se ya direct enter karein)
+MOZ_ACCESS_ID = st.secrets.get("mozscape-cv9i4P2xN5", "")
+MOZ_SECRET_KEY = st.secrets.get("EeDU0VboQ7woMS7iwooeGpYWh4eHVxhQ", "")
+
+# Gemini API Key
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
-st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
-st.title("Agency Technical SEO & Authority Audit Suite")
-st.write("Perform deep technical diagnostics, Google SERP simulation, and side-by-side competitor benchmark gap analysis with 1-click executive PDF delivery.")
+st.set_page_config(page_title="Deep Technical & Moz Authority Audit", layout="wide")
+st.title("Agency Technical SEO & Live Moz Authority Audit Suite")
+st.write("Perform deep technical diagnostics, live Moz DA/PA/Spam Score metrics, Google SERP simulation, and side-by-side competitor benchmarking with 1-click executive PDF delivery.")
 
 
 def extract_clean_word_count(html_content):
@@ -45,7 +49,37 @@ def extract_clean_word_count(html_content):
         return 0
 
 
-def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag, gap_data, keyword, comp_data=None):
+def get_moz_metrics(target_url, access_id, secret_key):
+    """Moz Links API v2: Domain Authority, Page Authority, aur Spam Score"""
+    if not access_id or not secret_key:
+        return {"da": "N/A", "pa": "N/A", "spam": "N/A", "status": "API Key Missing"}
+
+    clean_target = target_url.replace("https://", "").replace("http://", "").strip("/")
+    endpoint = "https://lsapi.seomoz.com/v2/url_metrics"
+    payload = {"targets": [clean_target, target_url]}
+
+    try:
+        res = requests.post(endpoint, json=payload, auth=(access_id, secret_key), timeout=8)
+        if res.status_code == 200:
+            data = res.json()
+            results = data.get("results_by_target", {})
+            metrics = results.get(clean_target) or results.get(target_url) or (data.get("results", [{}])[0] if data.get("results") else {})
+            
+            raw_da = metrics.get("domain_authority", "N/A")
+            raw_pa = metrics.get("page_authority", "N/A")
+            raw_spam = metrics.get("spam_score", "N/A")
+
+            da_val = int(raw_da) if isinstance(raw_da, (int, float)) and raw_da >= 0 else "N/A"
+            pa_val = int(raw_pa) if isinstance(raw_pa, (int, float)) and raw_pa >= 0 else "N/A"
+            spam_val = int(raw_spam) if isinstance(raw_spam, (int, float)) and raw_spam >= 0 else "N/A"
+
+            return {"da": da_val, "pa": pa_val, "spam": spam_val, "status": "Live Moz Verified"}
+        return {"da": "N/A", "pa": "N/A", "spam": "N/A", "status": f"Status {res.status_code}"}
+    except Exception:
+        return {"da": "N/A", "pa": "N/A", "spam": "N/A", "status": "Connection Timed Out"}
+
+
+def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag, gap_data, keyword, moz_client, comp_data=None):
     if not GEMINI_API_KEY:
         return "Gemini API key not configured in Streamlit Secrets."
 
@@ -54,14 +88,15 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
         comp_context = f"""
         Direct Competitor Comparison:
         - Competitor URL: {comp_data['url']}
+        - Client DA: {moz_client['da']} vs Competitor DA: {comp_data.get('moz', {}).get('da', 'N/A')}
         - Client Speed: {psi.get('perf', 'N/A')}/100 vs Competitor Speed: {comp_data.get('speed', 'N/A')}/100
         - Client Word Count: {gap_data.get('client_words', 0)} vs Competitor Word Count: {comp_data.get('words', 0)}
-        - Competitor H1: {comp_data.get('h1', 'N/A')}
         """
 
     prompt = f"""
     You are an expert SEO strategist. Analyze these live audit findings for client website {url}:
     - Target Keyword: {keyword}
+    - Moz Authority: DA {moz_client['da']}, PA {moz_client['pa']}, Spam Score {moz_client['spam']}%
     - Title Tag: {title}
     - Meta Description: {meta_desc}
     - H1 Tag Count: {h1_count}
@@ -74,8 +109,8 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
     {comp_context}
 
     Write a private agency outreach brief containing:
-    1. 2 high-impact technical or content fixes to beat the competitor.
-    2. A short personalized cold email pitch Saad can send to this client to sell high-authority backlinks and SEO retainers.
+    1. 2 high-impact technical or authority fixes to improve DA and overtake the competitor.
+    2. A short personalized cold email pitch angle Saad can send to this client to sell high-authority backlinks and SEO retainers.
     Keep it strictly professional, concise, and actionable (maximum 150 words).
     """
 
@@ -298,8 +333,18 @@ def audit_deep_technical(target_url, soup, internal_links, headers):
     }
 
 
-def calculate_backlink_gap(competition_tier, client_words=0, comp_words=0):
+def calculate_backlink_gap(competition_tier, client_words=0, comp_words=0, moz_da="N/A", comp_da="N/A"):
     word_diff = max(0, comp_words - client_words)
+    
+    # Calculate authority gap if Moz DA is available
+    da_gap_note = ""
+    if isinstance(moz_da, int) and isinstance(comp_da, int):
+        diff_da = comp_da - moz_da
+        if diff_da > 0:
+            da_gap_note = f"Your competitor has a {diff_da}-point Moz DA advantage."
+        else:
+            da_gap_note = f"You hold a {abs(diff_da)}-point Moz DA lead over your competitor."
+
     if "Low" in competition_tier:
         gap_est = "10 - 25 High-Quality Backlinks"
         strat = "Local citations, niche business directories, and 2-3 contextual guest posts per month."
@@ -320,7 +365,8 @@ def calculate_backlink_gap(competition_tier, client_words=0, comp_words=0):
         "strategy": strat,
         "word_diff": word_diff,
         "client_words": client_words,
-        "comp_words": comp_words
+        "comp_words": comp_words,
+        "da_gap_note": da_gap_note
     }
 
 
@@ -382,7 +428,7 @@ def build_pdf_report(data):
     story.append(meta_table)
     story.append(Spacer(1, 5))
 
-    # 3. Diagnostics Calculation
+    # 3. Diagnostics & Moz Overview Card
     calc_perf = 65
     if isinstance(data['psi']['perf'], int):
         calc_perf = data['psi']['perf']
@@ -402,22 +448,26 @@ def build_pdf_report(data):
     donut_img = Image(donut_chart_buffer, width=95, height=95)
     bar_img = Image(bar_chart_buffer, width=175, height=95)
 
+    moz = data['moz']
+    spam_display = f"{moz['spam']}%" if moz['spam'] != "N/A" else "N/A"
+
     verdict_subtable_data = [
-        [Paragraph("Audit Summary", cell_bold), Paragraph("", cell_txt)],
+        [Paragraph("Executive Summary & Moz Metrics", cell_bold), Paragraph("", cell_txt)],
+        [Paragraph("Moz Domain Authority (DA):", cell_txt), Paragraph(f"**{moz['da']}/100**", cell_bold)],
+        [Paragraph("Moz Page Authority (PA):", cell_txt), Paragraph(f"**{moz['pa']}/100**", cell_bold)],
+        [Paragraph("Moz Spam Score:", cell_txt), Paragraph(f"**{spam_display}**", cell_bold)],
         [Paragraph("Mobile Performance:", cell_txt), Paragraph(str(data['psi']['perf']) + "/100", cell_bold)],
-        [Paragraph("Lighthouse SEO:", cell_txt), Paragraph(str(data['psi']['seo']) + "/100", cell_bold)],
-        [Paragraph("HTTPS Security:", cell_txt), Paragraph(data['ssl'], cell_txt)],
-        [Paragraph("Canonical Mapping:", cell_txt), Paragraph(data['canonical'], cell_txt)]
+        [Paragraph("HTTPS / SSL Status:", cell_txt), Paragraph(data['ssl'], cell_txt)]
     ]
-    verdict_subtable = Table(verdict_subtable_data, colWidths=[105, 95])
+    verdict_subtable = Table(verdict_subtable_data, colWidths=[115, 85])
     verdict_subtable.setStyle(TableStyle([
         ('PADDING', (0, 0), (-1, -1), 1),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
 
-    story.append(Paragraph("Executive Performance & Structural Diagnostics", sec_title))
+    story.append(Paragraph("Executive Performance, Structural & Moz Metrics", sec_title))
     health_summary_card = [[donut_img, verdict_subtable, bar_img]]
-    diag_table = Table(health_summary_card, colWidths=[110, 210, 228])
+    diag_table = Table(health_summary_card, colWidths=[105, 215, 228])
     diag_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), c_light),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -429,10 +479,11 @@ def build_pdf_report(data):
     story.append(diag_table)
     story.append(Spacer(1, 5))
 
-    # 4. Side-by-Side Competitor Comparison Table (Agar competitor mojood ho)
+    # 4. Side-by-Side Competitor Comparison Table (including Moz Metrics)
     if data.get('comp_data'):
         comp = data['comp_data']
-        story.append(Paragraph("Direct Side-by-Side Competitor Benchmark", sec_title))
+        comp_moz = comp.get('moz', {'da': 'N/A', 'pa': 'N/A', 'spam': 'N/A'})
+        story.append(Paragraph("Direct Side-by-Side Competitor Benchmark (With Moz Authority)", sec_title))
         
         speed_gap = "Balanced"
         if isinstance(data['psi']['perf'], int) and isinstance(comp['speed'], int):
@@ -441,12 +492,18 @@ def build_pdf_report(data):
 
         content_gap = f"{data['gap_data']['word_diff']} Words Deficit" if data['gap_data']['word_diff'] > 0 else "Content Lead"
 
+        da_gap_str = "Balanced"
+        if isinstance(moz['da'], int) and isinstance(comp_moz['da'], int):
+            da_diff = comp_moz['da'] - moz['da']
+            da_gap_str = f"Competitor +{da_diff} DA" if da_diff > 0 else f"Client +{abs(da_diff)} DA"
+
         comp_table_rows = [
             [Paragraph("Benchmark Metric", cell_bold), Paragraph(f"Client ({data['domain']})", cell_bold), Paragraph(f"Competitor ({comp['domain']})", cell_bold), Paragraph("Competitive Gap / Advantage", cell_bold)],
+            [Paragraph("Moz Domain Authority (DA)", cell_txt), Paragraph(f"{moz['da']}/100", cell_bold), Paragraph(f"{comp_moz['da']}/100", cell_bold), Paragraph(da_gap_str, cell_bold)],
+            [Paragraph("Moz Page Authority (PA)", cell_txt), Paragraph(f"{moz['pa']}/100", cell_txt), Paragraph(f"{comp_moz['pa']}/100", cell_txt), Paragraph("Page Strength", cell_txt)],
+            [Paragraph("Moz Spam Score", cell_txt), Paragraph(f"{moz['spam']}%", cell_txt), Paragraph(f"{comp_moz['spam']}%", cell_txt), Paragraph("Penalty Risk Assessment", cell_txt)],
             [Paragraph("Mobile PageSpeed", cell_txt), Paragraph(f"{data['psi']['perf']}/100", cell_txt), Paragraph(f"{comp['speed']}/100", cell_txt), Paragraph(speed_gap, cell_bold)],
             [Paragraph("Content Depth (Word Count)", cell_txt), Paragraph(f"{data['client_words']:,} words", cell_txt), Paragraph(f"{comp['words']:,} words", cell_txt), Paragraph(content_gap, cell_bold)],
-            [Paragraph("Primary H1 Architecture", cell_txt), Paragraph(f"{data['h1_count']} H1 detected", cell_txt), Paragraph(f"{comp['h1_count']} H1 detected", cell_txt), Paragraph("Keyword Heading Structure", cell_txt)],
-            [Paragraph("External Reference Links", cell_txt), Paragraph(f"{data['ext_links']} links", cell_txt), Paragraph(f"{comp['ext_links']} links", cell_txt), Paragraph("Outbound Authority Trust", cell_txt)],
             [Paragraph("Authority Gap to Overtake", cell_txt), Paragraph(data['gap_data']['benchmark_rd'], cell_txt), Paragraph("Market Leader Profile", cell_txt), Paragraph(f"Need {data['gap_data']['gap_estimate']}", cell_bold)]
         ]
         comp_table = Table(comp_table_rows, colWidths=[140, 130, 130, 148])
@@ -503,11 +560,11 @@ def build_pdf_report(data):
     story.append(Spacer(1, 5))
 
     # 7. Pitch Box
-    pitch_header = f"Ready to Beat Your Competitor? {AGENCY_NAME} Authority Outreach"
+    pitch_header = f"Ready to Boost Your Moz DA & Beat Your Competitors? {AGENCY_NAME}"
     pitch_details = (
-        f"Fixing technical gaps makes your site crawl-ready, but overtaking competitors requires higher authority. "
-        f"We secure targeted, high-traffic editorial backlinks (DR 40 to 80+) that close the referring domain gap and drive page 1 rankings. "
-        f"Contact our team at {AGENCY_EMAIL} or WhatsApp {AGENCY_PHONE} for your tailored campaign."
+        f"While on-page technical fixes ensure crawl readiness, Moz Domain Authority is driven by contextual, high-tier editorial backlinks. "
+        f"We secure niche-relevant, high-traffic guest posts on real publisher websites (DR/DA 40 to 80+) to safely bridge your authority gap. "
+        f"Contact our outreach specialists at {AGENCY_EMAIL} or WhatsApp {AGENCY_PHONE} for your customized link-building roadmap."
     )
     pitch_card = [
         [Paragraph(pitch_header, pitch_title)],
@@ -553,7 +610,7 @@ with st.form("audit_form"):
         ["Medium Competition (Standard Commercial Niche)", "Low Competition (Local / Micro-Niche)", "High Competition (Global / Finance / SaaS)"]
     )
 
-    submit_btn = st.form_submit_button("Generate Complete Technical & Authority Audit 🚀")
+    submit_btn = st.form_submit_button("Generate Complete Technical & Moz Authority Audit 🚀")
 
 if submit_btn:
     if not email.strip() or "@" not in email or "." not in email:
@@ -576,7 +633,7 @@ if submit_btn:
     user_display_name = name_str if name_str else "Website Owner"
     active_keyword = target_keyword.strip() if target_keyword.strip() else "Core Industry Keyword"
 
-    with st.spinner(f"Crawling sites & analyzing benchmarks..."):
+    with st.spinner("Crawling sites, querying Moz API & analyzing benchmarks..."):
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         
         # 1. Crawl Client Website
@@ -617,6 +674,9 @@ if submit_btn:
         tech_diag = audit_deep_technical(target_url, soup, internal_links, headers)
         psi_data = get_google_pagespeed(target_url)
 
+        # ⚡ LIVE MOZ METRICS FOR CLIENT
+        moz_client = get_moz_metrics(target_url, MOZ_ACCESS_ID, MOZ_SECRET_KEY)
+
         # 2. Crawl Competitor (Agar URL diya gaya ho)
         comp_data = None
         if comp_url:
@@ -627,6 +687,7 @@ if submit_btn:
                 comp_h1s = [h.get_text(strip=True) for h in comp_soup.find_all("h1")]
                 comp_domain = tldextract.extract(comp_url).registered_domain
                 comp_psi = get_google_pagespeed(comp_url)
+                comp_moz = get_moz_metrics(comp_url, MOZ_ACCESS_ID, MOZ_SECRET_KEY)
                 
                 comp_ext = [
                     a["href"] for a in comp_soup.find_all("a", href=True)
@@ -640,7 +701,8 @@ if submit_btn:
                     "words": comp_words,
                     "h1": comp_h1s[0] if comp_h1s else "None detected",
                     "h1_count": len(comp_h1s),
-                    "ext_links": len(comp_ext)
+                    "ext_links": len(comp_ext),
+                    "moz": comp_moz
                 }
             except Exception as comp_err:
                 st.warning(f"Competitor crawl skipped due to connection limit: {comp_err}")
@@ -648,14 +710,15 @@ if submit_btn:
         # Gap calculation
         client_words = client_word_count
         comp_words_val = comp_data['words'] if comp_data else 0
-        gap_data = calculate_backlink_gap(competition_level, client_words=client_words, comp_words=comp_words_val)
+        comp_da_val = comp_data['moz']['da'] if comp_data else "N/A"
+        gap_data = calculate_backlink_gap(competition_level, client_words=client_words, comp_words=comp_words_val, moz_da=moz_client['da'], comp_da=comp_da_val)
 
         # Gemini AI Pitch
         gemini_strategy = get_gemini_private_strategy(
-            target_url, title, meta_desc, len(h1_tags), psi_data, tech_diag, gap_data, active_keyword, comp_data=comp_data
+            target_url, title, meta_desc, len(h1_tags), psi_data, tech_diag, gap_data, active_keyword, moz_client, comp_data=comp_data
         )
 
-        # Sheet Webhook
+        # Sheet Webhook (with Moz Metrics)
         if GOOGLE_SHEET_WEBHOOK_URL and "script.google.com" in GOOGLE_SHEET_WEBHOOK_URL:
             try:
                 sheet_payload = {
@@ -663,6 +726,9 @@ if submit_btn:
                     "email": email,
                     "url": target_url,
                     "competitor_url": comp_url if comp_data else "N/A",
+                    "moz_da": moz_client['da'],
+                    "moz_pa": moz_client['pa'],
+                    "moz_spam": moz_client['spam'],
                     "perf_score": psi_data['perf'],
                     "comp_speed": comp_data['speed'] if comp_data else "N/A",
                     "client_words": client_words,
@@ -675,37 +741,44 @@ if submit_btn:
 
         st.success(f"Audit completed successfully for {user_display_name}!")
 
-        # Metrics Row
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Client Speed", f"{psi_data['perf']}/100")
-        c2.metric("Client Word Count", f"{client_words:,} words")
-        c3.metric("Broken Links Status", str(tech_diag['broken_count']) + " Broken")
-        c4.metric("Backlink Gap Est.", gap_data['gap_estimate'].split()[0])
+        # ==========================================================
+        # 📊 LIVE MOZ & SPEED METRICS CARDS (UI)
+        # ==========================================================
+        st.markdown("### 🏆 Live Moz Authority & Performance Metrics")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Moz Domain Authority (DA)", f"{moz_client['da']}/100")
+        m2.metric("Moz Page Authority (PA)", f"{moz_client['pa']}/100")
+        m3.metric("Moz Spam Score", f"{moz_client['spam']}%" if moz_client['spam'] != "N/A" else "N/A")
+        m4.metric("Mobile PageSpeed", f"{psi_data['perf']}/100")
 
         # ==========================================================
         # ⚔️ SIDE-BY-SIDE COMPETITOR COMPARISON (UI)
         # ==========================================================
         if comp_data:
-            st.markdown("### ⚔️ Side-by-Side Competitor Benchmark")
+            st.markdown("### ⚔️ Side-by-Side Competitor Benchmark (With Moz Authority)")
             cmp_col1, cmp_col2 = st.columns(2)
             
             with cmp_col1:
                 with st.container(border=True):
                     st.markdown(f"#### 🌐 Your Site: `{base_domain}`")
+                    st.write(f"• **Moz DA:** {moz_client['da']}/100 | **PA:** {moz_client['pa']}/100")
+                    st.write(f"• **Moz Spam Score:** {moz_client['spam']}%")
                     st.write(f"• **Mobile Speed:** {psi_data['perf']}/100")
                     st.write(f"• **Word Count:** {client_words:,} words")
                     st.write(f"• **H1 Headings:** {len(h1_tags)} detected")
-                    st.write(f"• **Outbound References:** {len(external_links)} links")
-                    st.write(f"• **Missing Image ALT:** {len(missing_alt)} tags")
 
             with cmp_col2:
                 with st.container(border=True):
+                    comp_m = comp_data['moz']
                     st.markdown(f"#### 🎯 Competitor: `{comp_data['domain']}`")
+                    st.write(f"• **Moz DA:** {comp_m['da']}/100 | **PA:** {comp_m['pa']}/100")
+                    st.write(f"• **Moz Spam Score:** {comp_m['spam']}%")
                     st.write(f"• **Mobile Speed:** {comp_data['speed']}/100")
                     st.write(f"• **Word Count:** {comp_data['words']:,} words")
-                    st.write(f"• **H1 Headings:** {comp_data['h1_count']} detected")
-                    st.write(f"• **Outbound References:** {comp_data['ext_links']} links")
                     st.write(f"• **Primary Heading:** {comp_data['h1'][:40]}...")
+
+            if gap_data['da_gap_note']:
+                st.info(f"⚡ **Moz DA Analysis:** {gap_data['da_gap_note']}")
 
             if gap_data['word_diff'] > 0:
                 st.warning(f"⚠️ **Content Depth Gap:** Competitor has **{gap_data['word_diff']:,} more words** on their target page. Expand your topical coverage.")
@@ -752,6 +825,7 @@ if submit_btn:
             'gap_data': gap_data,
             'comp_data': comp_data,
             'client_words': client_words,
+            'moz': moz_client,
             'tech_diag': tech_diag,
             'psi': psi_data,
             'ssl': ssl_val,
@@ -771,8 +845,8 @@ if submit_btn:
         # Build PDF
         pdf_file_bytes = build_pdf_report(pdf_payload)
         st.download_button(
-            label="📥 Download Executive Visual SEO & Technical Audit (PDF)",
+            label="📥 Download Executive Visual SEO & Moz Authority Audit (PDF)",
             data=pdf_file_bytes,
-            file_name=f"SEO_Audit_Deep_{base_domain}.pdf",
+            file_name=f"SEO_Audit_Moz_{base_domain}.pdf",
             mime="application/pdf"
         )
