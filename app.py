@@ -95,6 +95,8 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
             flash_models = [m for m in active_supported if "flash" in m]
             if flash_models:
                 candidate_models = flash_models + candidate_models
+            elif active_supported:
+                candidate_models = active_supported + candidate_models
     except Exception:
         pass
 
@@ -538,24 +540,20 @@ with st.form("audit_form"):
     with col3:
         email = st.text_input("Business Email *", placeholder="name@company.com")
     with col4:
-        website_url = st.text_input("Client Website URL *", placeholder="https://example.com")
+        target_keyword = st.text_input("Primary Target Keyword (Optional)", placeholder="e.g. SEO Agency Lahore")
 
     col5, col6 = st.columns(2)
     with col5:
-        target_keyword = st.text_input("Primary Target Keyword (Optional)", placeholder="e.g. SEO Agency Lahore")
+        website_url = st.text_input("Client Website URL *", placeholder="https://example.com")
     with col6:
-        competition_level = st.selectbox(
-            "Niche Competition Level",
-            ["Medium Competition (Standard Commercial Niche)", "Low Competition (Local / Micro-Niche)", "High Competition (Global / Finance / SaaS)"]
-        )
+        competitor_input_url = st.text_input("Competitor Website URL (Optional - For Comparison)", placeholder="https://competitor.com")
 
-    # ⚡ Side-by-Side Competitor Toggle
-    compare_mode = st.checkbox("⚡ Compare with Competitor (Side-by-Side Benchmark)", value=False)
-    competitor_input_url = ""
-    if compare_mode:
-        competitor_input_url = st.text_input("Competitor Website URL *", placeholder="https://competitor.com")
+    competition_level = st.selectbox(
+        "Niche Competition Level",
+        ["Medium Competition (Standard Commercial Niche)", "Low Competition (Local / Micro-Niche)", "High Competition (Global / Finance / SaaS)"]
+    )
 
-    submit_btn = st.form_submit_button("Generate Complete Technical & Competitor Audit 🚀")
+    submit_btn = st.form_submit_button("Generate Complete Technical & Authority Audit 🚀")
 
 if submit_btn:
     if not email.strip() or "@" not in email or "." not in email:
@@ -564,10 +562,6 @@ if submit_btn:
 
     if not website_url.strip():
         st.error("Please enter a valid Website URL.")
-        st.stop()
-
-    if compare_mode and not competitor_input_url.strip():
-        st.error("Please enter a valid Competitor Website URL for comparison.")
         st.stop()
 
     target_url = website_url.strip()
@@ -582,7 +576,7 @@ if submit_btn:
     user_display_name = name_str if name_str else "Website Owner"
     active_keyword = target_keyword.strip() if target_keyword.strip() else "Core Industry Keyword"
 
-    with st.spinner(f"Crawling sites & analyzing competitive benchmarks..."):
+    with st.spinner(f"Crawling sites & analyzing benchmarks..."):
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         
         # 1. Crawl Client Website
@@ -623,9 +617,9 @@ if submit_btn:
         tech_diag = audit_deep_technical(target_url, soup, internal_links, headers)
         psi_data = get_google_pagespeed(target_url)
 
-        # 2. Crawl Competitor (Agar toggle active ho)
+        # 2. Crawl Competitor (Agar URL diya gaya ho)
         comp_data = None
-        if compare_mode and comp_url:
+        if comp_url:
             try:
                 comp_resp = requests.get(comp_url, headers=headers, timeout=15)
                 comp_soup = BeautifulSoup(comp_resp.text, "html.parser")
