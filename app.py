@@ -14,7 +14,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 # ==========================================================
-# AGENCY BRANDING SETTINGS
+# AGENCY BRANDING & INTEGRATION SETTINGS
 # ==========================================================
 AGENCY_NAME = "RankCentre SEO & Digital Outreach"
 AGENCY_EMAIL = "contact@rankcentre.net"
@@ -22,12 +22,55 @@ AGENCY_PHONE = "+92 302 6264634"
 AGENCY_WEBSITE = "https://rankcentre.net"
 AGENCY_ADDRESS = "Office 402, Business Arcade, Gujrat / Lahore, Pakistan"
 
-# ✅ AAP KA GOOGLE SHEET WEBHOOK LINK YAHAN CONNECT HO GAYA HAI:
+# ✅ GOOGLE SHEET WEBHOOK LINK
 GOOGLE_SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwetciC31Q-zSgylj7cFxnMN1IUs-B_-bSq3Zfs1Je3AHomk8Qg-IHKlWy2xeI1pyGw4g/exec"
+
+# 🔑 GOOGLE AI STUDIO GEMINI API KEY (Yahan apni key paste karein):
+GEMINI_API_KEY = "AQ.Ab8RN6KNpYimUL_YG8zz1BUoLMYGy3zXtNQ5uodnI3jV6HRVrA"
 
 st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
 st.title("Agency Technical SEO & Authority Audit Suite")
 st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Links) and link-building gap analysis with 1-click executive PDF delivery.")
+
+def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag, gap_data, keyword):
+    if not GEMINI_API_KEY or "PASTE_YOUR" in GEMINI_API_KEY:
+        return "Gemini API key not configured."
+
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    headers = {"Content-Type": "application/json"}
+    
+    prompt = f"""
+    You are an expert SEO strategist. Analyze these live audit findings for client website {url}:
+    - Target Keyword: {keyword}
+    - Title Tag: {title}
+    - Meta Description: {meta_desc}
+    - H1 Tag Count: {h1_count}
+    - PageSpeed Mobile: {psi['perf']}/100, Lighthouse SEO: {psi['seo']}/100
+    - Robots.txt: {tech_diag['robots']}
+    - XML Sitemap: {tech_diag['sitemap']}
+    - Schema Markup: {tech_diag['schema']}
+    - Broken Links Tested: {tech_diag['broken_status']}
+    - Estimated Backlink Gap: {gap_data['gap_estimate']}
+
+    Write a private agency outreach brief containing:
+    1. 2 quick-win technical fixes the client needs right now.
+    2. A short personalized cold email pitch angle Saad can send to this client to sell them high-authority backlinks and SEO services.
+    Keep it strictly professional, concise, and actionable (maximum 150 words).
+    """
+
+    body = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+
+    try:
+        res = requests.post(endpoint, headers=headers, json=body, timeout=12)
+        res_data = res.json()
+        ai_reply = res_data["candidates"][0]["content"]["parts"][0]["text"]
+        return ai_reply.strip()
+    except Exception as e:
+        return f"Gemini generation skipped: {e}"
 
 def generate_health_donut_chart(overall_score):
     fig, ax = plt.subplots(figsize=(2.2, 2.2), subplot_kw=dict(aspect="equal"))
@@ -226,6 +269,7 @@ def calculate_backlink_gap(competition_tier):
     }
 
 def build_pdf_report(data):
+    # Notice: data['ai_strategy'] is intentionally NOT in the PDF
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=32, leftMargin=32, topMargin=28, bottomMargin=28)
     styles = getSampleStyleSheet()
@@ -475,7 +519,7 @@ if submit_btn:
     if target_keyword.strip():
         active_keyword = target_keyword.strip()
 
-    with st.spinner(f"Crawling {target_url} (Checking Robots, Sitemap, Schema, Broken Links)..."):
+    with st.spinner(f"Crawling {target_url} & Generating Gemini Strategic Brief..."):
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         try:
             response = requests.get(target_url, headers=headers, timeout=15)
@@ -529,7 +573,12 @@ if submit_btn:
         # Backlink Gap
         gap_data = calculate_backlink_gap(competition_level)
 
-        # 🚀 AUTO-SAVE LEAD TO GOOGLE SHEET (WEBHOOK)
+        # 🧠 GEMINI AI PRIVATE STRATEGY GENERATION
+        gemini_strategy = get_gemini_private_strategy(
+            target_url, title, meta_desc, len(h1_tags), psi_data, tech_diag, gap_data, active_keyword
+        )
+
+        # 🚀 AUTO-SAVE LEAD & AI SUGGESTIONS TO GOOGLE SHEET (WEBHOOK)
         if GOOGLE_SHEET_WEBHOOK_URL and "script.google.com" in GOOGLE_SHEET_WEBHOOK_URL:
             try:
                 sheet_payload = {
@@ -539,7 +588,8 @@ if submit_btn:
                     "perf_score": psi_data['perf'],
                     "seo_score": psi_data['seo'],
                     "h1_count": len(h1_tags),
-                    "missing_alt": len(missing_alt)
+                    "missing_alt": len(missing_alt),
+                    "ai_strategy": gemini_strategy
                 }
                 requests.post(GOOGLE_SHEET_WEBHOOK_URL, json=sheet_payload, timeout=6)
             except Exception:
@@ -606,6 +656,7 @@ if submit_btn:
             'ext_links': len(external_links)
         }
 
+        # Build PDF (Client NEVER sees Gemini AI suggestions here)
         pdf_file_bytes = build_pdf_report(pdf_payload)
         st.download_button(
             label="📥 Download Executive Visual SEO & Technical Audit (PDF)",
