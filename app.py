@@ -33,12 +33,9 @@ st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
 st.title("Agency Technical SEO & Authority Audit Suite")
 st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Links) and link-building gap analysis with 1-click executive PDF delivery.")
 def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag, gap_data, keyword):
-    if not GEMINI_API_KEY or "PASTE_YOUR" in GEMINI_API_KEY:
-        return "Gemini API key not configured."
+    if not GEMINI_API_KEY:
+        return "Gemini API key not configured in Streamlit Secrets."
 
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    
     prompt = f"""
     You are an expert SEO strategist. Analyze these live audit findings for client website {url}:
     - Target Keyword: {keyword}
@@ -54,32 +51,44 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
     2. A short personalized cold pitch angle to sell them high-authority backlinks and SEO services.
     """
 
-    body = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
-    }
+    headers = {"Content-Type": "application/json"}
+    body = {"contents": [{"parts": [{"text": prompt}]}]}
 
+    candidate_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-pro"]
     try:
-        res = requests.post(endpoint, headers=headers, json=body, timeout=15)
-        res_data = res.json()
-        
-        # Agar Google ki taraf se koi error aaya ho:
-        if "error" in res_data:
-            return f"Google API Error ({res.status_code}): {res_data['error'].get('message', 'Unknown error')}"
-            
-        # Agar jawab kamyabi se aa gaya ho:
-        if "candidates" in res_data and len(res_data["candidates"]) > 0:
-            parts = res_data["candidates"][0].get("content", {}).get("parts", [])
-            if parts:
-                return parts[0].get("text", "").strip()
-                
-        return f"Gemini response structure unexpected: {res_data}"
-    except Exception as e:
-        return f"Request failed: {str(e)}"
-        return f"Gemini generation skipped: {e}"
+        list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+        list_res = requests.get(list_url, timeout=8).json()
+        if "models" in list_res:
+            active_supported = [
+                m["name"].replace("models/", "") 
+                for m in list_res["models"] 
+                if "generateContent" in m.get("supportedGenerationMethods", [])
+            ]
+            flash_models = [m for m in active_supported if "flash" in m]
+            if flash_models:
+                candidate_models = flash_models + candidate_models
+            elif active_supported:
+                candidate_models = active_supported + candidate_models
+    except Exception:
+        pass
 
-def generate_health_donut_chart(overall_score):
+    last_err = ""
+    for model_name in list(dict.fromkeys(candidate_models)):
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+        try:
+            res = requests.post(endpoint, headers=headers, json=body, timeout=12)
+            res_data = res.json()
+            if "candidates" in res_data and len(res_data["candidates"]) > 0:
+                parts = res_data["candidates"][0].get("content", {}).get("parts", [])
+                if parts:
+                    return parts[0].get("text", "").strip()
+            if "error" in res_data:
+                last_err = f"{model_name}: {res_data['error'].get('message')}"
+        except Exception as e:
+            last_err = str(e)
+            continue
+
+    return f"Gemini generation failed. Details: {last_err}"overall_score):
     fig, ax = plt.subplots(figsize=(2.2, 2.2), subplot_kw=dict(aspect="equal"))
     score = int(overall_score)
     if score not in range(0, 101):
