@@ -31,7 +31,6 @@ GEMINI_API_KEY = "AQ.Ab8RN6KNpYimUL_YG8zz1BUoLMYGy3zXtNQ5uodnI3jV6HRVrA"
 st.set_page_config(page_title="Deep Technical & SEO Audit Suite", layout="wide")
 st.title("Agency Technical SEO & Authority Audit Suite")
 st.write("Perform deep technical diagnostics (Robots, Sitemap, Schema, Broken Links) and link-building gap analysis with 1-click executive PDF delivery.")
-
 def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag, gap_data, keyword):
     if not GEMINI_API_KEY or "PASTE_YOUR" in GEMINI_API_KEY:
         return "Gemini API key not configured."
@@ -45,17 +44,13 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
     - Title Tag: {title}
     - Meta Description: {meta_desc}
     - H1 Tag Count: {h1_count}
-    - PageSpeed Mobile: {psi['perf']}/100, Lighthouse SEO: {psi['seo']}/100
-    - Robots.txt: {tech_diag['robots']}
-    - XML Sitemap: {tech_diag['sitemap']}
-    - Schema Markup: {tech_diag['schema']}
-    - Broken Links Tested: {tech_diag['broken_status']}
-    - Estimated Backlink Gap: {gap_data['gap_estimate']}
+    - PageSpeed Mobile: {psi.get('perf', 'N/A')}/100, Lighthouse SEO: {psi.get('seo', 'N/A')}/100
+    - Broken Links Tested: {tech_diag.get('broken_status', 'N/A')}
+    - Estimated Backlink Gap: {gap_data.get('gap_estimate', 'N/A')}
 
-    Write a private agency outreach brief containing:
-    1. 2 quick-win technical fixes the client needs right now.
-    2. A short personalized cold email pitch angle Saad can send to this client to sell them high-authority backlinks and SEO services.
-    Keep it strictly professional, concise, and actionable (maximum 150 words).
+    Write a concise agency outreach strategy (under 120 words):
+    1. 2 quick-win technical fixes.
+    2. A short personalized cold pitch angle to sell them high-authority backlinks and SEO services.
     """
 
     body = {
@@ -65,11 +60,22 @@ def get_gemini_private_strategy(url, title, meta_desc, h1_count, psi, tech_diag,
     }
 
     try:
-        res = requests.post(endpoint, headers=headers, json=body, timeout=12)
+        res = requests.post(endpoint, headers=headers, json=body, timeout=15)
         res_data = res.json()
-        ai_reply = res_data["candidates"][0]["content"]["parts"][0]["text"]
-        return ai_reply.strip()
+        
+        # Agar Google ki taraf se koi error aaya ho:
+        if "error" in res_data:
+            return f"Google API Error ({res.status_code}): {res_data['error'].get('message', 'Unknown error')}"
+            
+        # Agar jawab kamyabi se aa gaya ho:
+        if "candidates" in res_data and len(res_data["candidates"]) > 0:
+            parts = res_data["candidates"][0].get("content", {}).get("parts", [])
+            if parts:
+                return parts[0].get("text", "").strip()
+                
+        return f"Gemini response structure unexpected: {res_data}"
     except Exception as e:
+        return f"Request failed: {str(e)}"
         return f"Gemini generation skipped: {e}"
 
 def generate_health_donut_chart(overall_score):
